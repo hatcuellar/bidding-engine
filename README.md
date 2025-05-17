@@ -58,11 +58,62 @@ ENV=development bash start_fastapi.sh
 
 ## Usage Examples
 
+### Authentication with JWT
+
+Both partners (publishers) and brands (advertisers) use JWT for authentication.
+
+#### Generate JWT Token for Partners
+
+```python
+import jwt
+import datetime
+
+# Generate a partner token (publisher)
+partner_payload = {
+    "sub": "partner_123",
+    "partner_id": 123,
+    "scope": "partner",
+    "exp": datetime.datetime.utcnow() + datetime.timedelta(days=30)
+}
+
+partner_token = jwt.encode(
+    partner_payload,
+    "YOUR_SECRET_KEY",  # Use environment secret in production
+    algorithm="HS256"
+)
+
+print(f"Partner JWT: {partner_token}")
+```
+
+#### Generate JWT Token for Brands
+
+```python
+import jwt
+import datetime
+
+# Generate a brand token (advertiser)
+brand_payload = {
+    "sub": "brand_456",
+    "brand_id": 456,
+    "scope": "brand",
+    "exp": datetime.datetime.utcnow() + datetime.timedelta(days=30)
+}
+
+brand_token = jwt.encode(
+    brand_payload,
+    "YOUR_SECRET_KEY",  # Use environment secret in production
+    algorithm="HS256"
+)
+
+print(f"Brand JWT: {brand_token}")
+```
+
 ### Calculate a Bid
 
 ```bash
 curl -X POST "http://localhost:8000/api/bid/calculate" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -d '{
     "brand_id": 123,
     "bid_amount": 2.50,
@@ -85,6 +136,7 @@ curl -X POST "http://localhost:8000/api/bid/calculate" \
 ```bash
 curl -X POST "http://localhost:8000/api/bid/strategy" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -d '{
     "brand_id": 123,
     "vpi_multiplier": 1.2,
