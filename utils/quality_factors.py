@@ -1,159 +1,129 @@
-import os
+"""
+Quality factors utilities for the bidding engine.
+
+This module contains functions for applying quality factors to normalized bid values.
+Quality factors adjust bids based on ad slot characteristics, page context, or
+other quality signals.
+"""
+
 import logging
-import json
 from typing import Dict, Any, Optional
-import xgboost as xgb
-import numpy as np
-from .redis_cache import get_cached_feature, set_cached_feature
+import json
 
 logger = logging.getLogger(__name__)
 
-# Path to XGBoost model file
-MODEL_PATH = os.getenv("QUALITY_MODEL_PATH", "models/quality_model.json")
-
-# Cache for the loaded model
-_model_cache = None
-
-
-async def load_xgboost_model() -> Optional[xgb.Booster]:
+async def apply_quality_factors(normalized_value: float, ad_slot: Dict[str, Any]) -> float:
     """
-    Load XGBoost model for quality factor prediction.
-    
-    Returns:
-        Loaded XGBoost model or None if not found/error
-    """
-    global _model_cache
-    
-    # Return cached model if available
-    if _model_cache is not None:
-        return _model_cache
-    
-    try:
-        # Try to load model from file
-        if os.path.exists(MODEL_PATH):
-            model = xgb.Booster()
-            model.load_model(MODEL_PATH)
-            _model_cache = model
-            logger.info(f"XGBoost model loaded from {MODEL_PATH}")
-            return model
-    except Exception as e:
-        logger.error(f"Failed to load XGBoost model: {e}")
-    
-    logger.warning("XGBoost model not available, will use fallback mean quality")
-    return None
-
-
-async def extract_features(ad_slot: Dict[str, Any]) -> Dict[str, float]:
-    """
-    Extract features from ad slot information for quality prediction.
+    Apply quality factors to adjust the normalized bid value.
     
     Args:
-        ad_slot: Dictionary with ad slot information
-        
-    Returns:
-        Dictionary of feature name to feature value
-    """
-    features = {}
-    
-    # Basic slot features
-    features["width"] = ad_slot.get("width", 0)
-    features["height"] = ad_slot.get("height", 0)
-    features["position"] = ad_slot.get("position", 0)
-    
-    # Page features
-    page = ad_slot.get("page", {})
-    features["page_category"] = hash(page.get("category", "")) % 100  # Simple category hashing
-    features["is_mobile"] = 1 if page.get("is_mobile", False) else 0
-    
-    # Calculate derived features
-    features["area"] = features["width"] * features["height"]
-    features["aspect_ratio"] = features["width"] / max(1, features["height"])
-    
-    return features
-
-
-async def get_placement_score(slot_id: int) -> float:
-    """
-    Get the quality score for a placement from cache or calculate it.
-    
-    Args:
-        slot_id: Ad slot identifier
-        
-    Returns:
-        Quality score for the placement
-    """
-    # Try to get from cache first
-    cache_key = f"placement_score:{slot_id}"
-    cached_score = await get_cached_feature(cache_key)
-    
-    if cached_score:
-        try:
-            return float(cached_score)
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid cached placement score for slot {slot_id}")
-    
-    # Default score if not in cache
-    return 1.0
-
-
-async def apply_quality_factors(base_value: float, ad_slot: Dict[str, Any]) -> float:
-    """
-    Apply quality factors to the base bid value.
-    
-    This function will:
-    1. Try to use XGBoost model if available
-    2. Fall back to simpler calculation if model unavailable
-    
-    Args:
-        base_value: Base bid value to adjust
-        ad_slot: Information about the ad placement
+        normalized_value: The normalized bid value per impression
+        ad_slot: Dictionary containing ad slot information
         
     Returns:
         Adjusted bid value after applying quality factors
     """
+    # Extract slot information
     slot_id = ad_slot.get("id", 0)
+    width = ad_slot.get("width", 0)
+    height = ad_slot.get("height", 0)
+    position = ad_slot.get("position", 0)
+    page_info = ad_slot.get("page", {})
     
-    # Get placement score from cache
-    placement_score = await get_placement_score(slot_id)
+    # Base quality factor starts at 1.0 (no adjustment)
+    quality_factor = 1.0
     
-    # Try to load the model
-    model = await load_xgboost_model()
+    # Adjust based on ad size/dimensions
+    size_factor = get_size_quality_factor(width, height)
+    quality_factor *= size_factor
     
-    if model is not None:
-        try:
-            # Extract features from ad slot
-            features = await extract_features(ad_slot)
-            
-            # Convert to DMatrix
-            feature_array = np.array([[v for k, v in sorted(features.items())]])
-            feature_names = [k for k, v in sorted(features.items())]
-            dmatrix = xgb.DMatrix(feature_array, feature_names=feature_names)
-            
-            # Predict quality factor
-            quality_factor = float(model.predict(dmatrix)[0])
-            
-            # Apply a sigmoid normalization to keep values reasonable
-            quality_factor = 1.0 / (1.0 + np.exp(-quality_factor))
-            
-            # Scale to a reasonable range (0.5 to 2.0)
-            quality_factor = 0.5 + quality_factor * 1.5
-            
-            logger.debug(f"Model-based quality factor: {quality_factor}")
-            
-        except Exception as e:
-            logger.error(f"Error predicting quality factor with model: {e}")
-            quality_factor = 1.0  # Default on error
-    else:
-        # Fallback calculation if model isn't available
-        # Simple heuristic based on placement score and position
-        position = ad_slot.get("position", 5)
-        position_factor = max(0.5, min(1.5, (10 - position) / 5))
-        
-        quality_factor = placement_score * position_factor
-        
-        logger.debug(f"Fallback quality factor: {quality_factor}")
+    # Adjust based on position (higher positions generally have better quality)
+    if position > 0:
+        position_factor = get_position_quality_factor(position)
+        quality_factor *= position_factor
     
-    # Apply quality factor to base value
-    adjusted_value = base_value * quality_factor
+    # Adjust based on page quality (if available)
+    if page_info:
+        page_factor = get_page_quality_factor(page_info)
+        quality_factor *= page_factor
+    
+    # Apply the quality factor to the normalized value
+    adjusted_value = normalized_value * quality_factor
+    
+    logger.debug(f"Applied quality factors to slot {slot_id}: {quality_factor:.2f} * {normalized_value:.6f} = {adjusted_value:.6f}")
     
     return adjusted_value
+
+def get_size_quality_factor(width: int, height: int) -> float:
+    """
+    Calculate quality factor based on ad size.
+    
+    Larger ads tend to have better viewability and engagement.
+    """
+    # If dimensions are not provided, return neutral factor
+    if not width or not height:
+        return 1.0
+        
+    # Calculate area
+    area = width * height
+    
+    # Common ad sizes and their approximate quality factors
+    if area >= 300000:  # Large formats (eg. 970x250)
+        return 1.3
+    elif area >= 200000:  # Medium-large formats (eg. 728x90)
+        return 1.2
+    elif area >= 100000:  # Medium formats (eg. 300x250)
+        return 1.1
+    elif area >= 50000:   # Small-medium formats
+        return 1.0
+    else:                # Small formats
+        return 0.9
+
+def get_position_quality_factor(position: int) -> float:
+    """
+    Calculate quality factor based on ad position.
+    
+    Lower position numbers (higher on page) tend to have better viewability.
+    """
+    # Position 1 (top) gets highest factor, decreasing as we go down
+    if position == 1:
+        return 1.25
+    elif position == 2:
+        return 1.15
+    elif position == 3:
+        return 1.05
+    elif position <= 5:
+        return 1.0
+    else:
+        return 0.9  # Positions far down the page
+
+def get_page_quality_factor(page_info: Dict[str, Any]) -> float:
+    """
+    Calculate quality factor based on page characteristics.
+    
+    Factors might include page category, content quality, user engagement, etc.
+    """
+    quality_factor = 1.0
+    
+    # Page category adjustment
+    category = page_info.get("category", "").lower()
+    if category in ["news", "finance", "technology"]:
+        quality_factor *= 1.1  # Premium categories
+    elif category in ["entertainment", "sports"]:
+        quality_factor *= 1.05  # High engagement categories
+    
+    # Traffic source adjustment
+    traffic_source = page_info.get("traffic_source", "").lower()
+    if traffic_source in ["direct", "search"]:
+        quality_factor *= 1.1  # Higher intent traffic
+    elif traffic_source in ["social"]:
+        quality_factor *= 0.95  # Lower intent traffic
+    
+    # Page engagement metrics (if available)
+    avg_time_on_page = page_info.get("avg_time_on_page", 0)
+    if avg_time_on_page > 120:  # More than 2 minutes
+        quality_factor *= 1.15  # High engagement
+    elif avg_time_on_page > 60:  # More than 1 minute
+        quality_factor *= 1.05  # Good engagement
+    
+    return quality_factor

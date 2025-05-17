@@ -6,7 +6,7 @@ import os
 
 from database import get_db
 from schemas import HealthResponse
-from utils.redis_cache import get_redis_client
+from utils.redis_cache import redis_pool
 
 router = APIRouter()
 
@@ -31,12 +31,17 @@ async def health_check(db: Session = Depends(get_db)):
     # Check Redis connection if configured
     if os.getenv("REDIS_URL"):
         try:
-            redis = await get_redis_client()
-            if redis:
-                await redis.ping()
-                components["redis"] = "ok"
+            if redis_pool:
+                # Simple check using SET/GET operations
+                test_key = "health:check"
+                await redis_pool.set(test_key, "ok", ex=60)  # 1 minute TTL
+                result = await redis_pool.get(test_key)
+                if result == "ok":
+                    components["redis"] = "ok"
+                else:
+                    components["redis"] = "error"
             else:
-                components["redis"] = "error"
+                components["redis"] = "not_initialized"
         except Exception:
             components["redis"] = "error"
     

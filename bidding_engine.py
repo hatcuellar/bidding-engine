@@ -35,7 +35,7 @@ class BiddingEngine:
         Returns:
             Dict with processed bid information
         """
-        brand_id = bid_request.get("brand_id")
+        brand_id = int(bid_request.get("brand_id", 0))
         bid_amount = float(bid_request.get("bid_amount", 0))
         bid_type = bid_request.get("bid_type", "CPM")
         ad_slot = bid_request.get("ad_slot", {})
@@ -48,7 +48,8 @@ class BiddingEngine:
             bid_amount = self.apply_brand_strategy(bid_amount, strategy)
         
         # Get historical performance metrics (with beta smoothing)
-        ctr, cvr = await self.get_historical_performance(brand_id, ad_slot.get("id"))
+        slot_id = int(ad_slot.get("id", 0))
+        ctr, cvr = await self.get_historical_performance(brand_id, slot_id)
         
         # Normalize bid to impression value (CPM equivalent)
         normalized_value = normalize_bid_to_impression_value(

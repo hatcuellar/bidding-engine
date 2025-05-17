@@ -1,220 +1,154 @@
+"""
+Redis caching utilities for the bidding engine.
+
+This module provides functions for caching and retrieving data using Redis,
+with connection pooling for better performance and reliability.
+"""
+
 import os
-import json
 import logging
-from typing import Optional, Any, Dict, List
-import redis.asyncio as aioredis
+import json
+from typing import Optional, Any, Dict
+
+# Import redis with proper error handling
+try:
+    import redis.asyncio as redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-# Get Redis URL from environment variable with fallback
-REDIS_URL = os.getenv("REDIS_URL")
+# Global Redis connection pool
 redis_pool = None
 
-async def initialize_redis_pool():
+async def initialize_redis_pool() -> bool:
     """
     Initialize the Redis connection pool.
-    Should be called during application startup.
-    """
-    global redis_pool
-    
-    if redis_pool is not None:
-        return  # Already initialized
-        
-    if REDIS_URL:
-        try:
-            redis_pool = await aioredis.from_url(
-                REDIS_URL,
-                encoding="utf-8",
-                decode_responses=True
-            )
-            logger.info("Redis connection pool initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Redis connection pool: {e}")
-            redis_pool = None
-    else:
-        logger.warning("REDIS_URL not set - feature caching disabled")
-        redis_pool = None
-
-async def close_redis_pool():
-    """
-    Close the Redis connection pool.
-    Should be called during application shutdown.
-    """
-    global redis_pool
-    
-    if redis_pool is not None:
-        await redis_pool.close()
-        redis_pool = None
-        logger.info("Redis connection pool closed")
-
-async def get_redis_client():
-    """
-    Get Redis client from the connection pool.
     
     Returns:
-        Redis client or None if pool is not initialized
+        True if successful, False otherwise
     """
     global redis_pool
     
-    if redis_pool is None and REDIS_URL:
-        # Lazy initialization if not done during startup
-        await initialize_redis_pool()
-            
-    return redis_pool
+    if not REDIS_AVAILABLE:
+        logger.warning("Redis not available. Caching will be disabled.")
+        return False
+    
+    # Get Redis URL from environment or use a default for local development
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    
+    try:
+        # Create connection pool
+        redis_pool = aioredis.from_url(
+            redis_url,
+            encoding="utf-8",
+            decode_responses=True
+        )
+        logger.info(f"Redis connection pool initialized: {redis_url}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis pool: {e}")
+        redis_pool = None
+        return False
 
+async def close_redis_pool() -> None:
+    """
+    Close the Redis connection pool.
+    """
+    global redis_pool
+    
+    if redis_pool:
+        try:
+            await redis_pool.close()
+            logger.info("Redis connection pool closed")
+        except Exception as e:
+            logger.error(f"Error closing Redis pool: {e}")
+        finally:
+            redis_pool = None
 
 async def get_cached_feature(key: str) -> Optional[str]:
     """
-    Get a cached feature value from Redis.
+    Get a cached feature from Redis.
     
     Args:
-        key: Cache key to retrieve
+        key: The cache key
         
     Returns:
-        Cached value or None if not found/error
+        The cached value, or None if not found or error
     """
-    redis = await get_redis_client()
-    if not redis:
+    if not redis_pool:
         return None
     
     try:
-        return await redis.get(key)
+        # Get value from Redis
+        value = await redis_pool.get(key)
+        if value:
+            logger.debug(f"Cache hit for key: {key}")
+        return value
     except Exception as e:
-        logger.error(f"Redis get error for key {key}: {e}")
+        logger.error(f"Error getting cached feature {key}: {e}")
         return None
 
-
-async def set_cached_feature(key: str, value: str, ttl: int = 86400) -> bool:
+async def set_cached_feature(key: str, value: str, ttl: int = 3600) -> bool:
     """
-    Store a feature value in Redis cache.
+    Set a cached feature in Redis.
     
     Args:
-        key: Cache key
-        value: Value to store
-        ttl: Time-to-live in seconds (default 24 hours)
+        key: The cache key
+        value: The value to cache
+        ttl: Time-to-live in seconds (default: 1 hour)
         
     Returns:
         True if successful, False otherwise
     """
-    redis = await get_redis_client()
-    if not redis:
+    if not redis_pool:
         return False
     
     try:
-        await redis.set(key, value, ex=ttl)
+        # Set value in Redis with TTL
+        await redis_pool.set(key, value, ex=ttl)
+        logger.debug(f"Cached feature {key} with TTL {ttl}s")
         return True
     except Exception as e:
-        logger.error(f"Redis set error for key {key}: {e}")
+        logger.error(f"Error caching feature {key}: {e}")
         return False
 
-
-async def cache_model_coefficients(model_name: str, coefficients: Dict[str, Any]) -> bool:
+async def get_cached_dict(key: str) -> Optional[Dict[str, Any]]:
     """
-    Cache model coefficients in Redis.
+    Get a cached JSON dictionary from Redis.
     
     Args:
-        model_name: Name/identifier of the model
-        coefficients: Dictionary of model coefficients
+        key: The cache key
         
     Returns:
-        True if successful, False otherwise
+        The cached dictionary, or None if not found or error
     """
-    key = f"model:{model_name}:coefficients"
-    try:
-        value = json.dumps(coefficients)
-        return await set_cached_feature(key, value)
-    except Exception as e:
-        logger.error(f"Error caching model coefficients: {e}")
-        return False
-
-
-async def get_model_coefficients(model_name: str) -> Optional[Dict[str, Any]]:
-    """
-    Get cached model coefficients from Redis.
+    cached_str = await get_cached_feature(key)
     
-    Args:
-        model_name: Name/identifier of the model
-        
-    Returns:
-        Dictionary of coefficients or None if not found/error
-    """
-    key = f"model:{model_name}:coefficients"
-    try:
-        value = await get_cached_feature(key)
-        if value:
-            return json.loads(value)
-        return None
-    except Exception as e:
-        logger.error(f"Error retrieving model coefficients: {e}")
-        return None
-
-
-async def cache_performance_metrics(brand_id: int, ad_slot_id: int, metrics: Dict[str, float], ttl: int = 3600) -> bool:
-    """
-    Cache performance metrics for a brand-slot combination.
-    
-    Args:
-        brand_id: Brand identifier
-        ad_slot_id: Ad slot identifier
-        metrics: Dictionary of performance metrics (ctr, cvr, etc.)
-        ttl: Time-to-live in seconds (default 1 hour)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    key = f"perf:{brand_id}:{ad_slot_id}"
-    try:
-        value = json.dumps(metrics)
-        return await set_cached_feature(key, value, ttl=ttl)
-    except Exception as e:
-        logger.error(f"Error caching performance metrics: {e}")
-        return False
-
-
-async def get_performance_metrics(brand_id: int, ad_slot_id: int) -> Optional[Dict[str, float]]:
-    """
-    Get cached performance metrics for a brand-slot combination.
-    
-    Args:
-        brand_id: Brand identifier
-        ad_slot_id: Ad slot identifier
-        
-    Returns:
-        Dictionary of metrics or None if not found/error
-    """
-    key = f"perf:{brand_id}:{ad_slot_id}"
-    try:
-        value = await get_cached_feature(key)
-        if value:
-            return json.loads(value)
-        return None
-    except Exception as e:
-        logger.error(f"Error retrieving performance metrics: {e}")
-        return None
-
-
-async def cache_batch_features(keys_values: Dict[str, str], ttl: int = 86400) -> List[bool]:
-    """
-    Cache multiple features in a batch operation.
-    
-    Args:
-        keys_values: Dictionary mapping keys to values
-        ttl: Time-to-live in seconds (default 24 hours)
-        
-    Returns:
-        List of success flags (True/False) for each key
-    """
-    redis = await get_redis_client()
-    if not redis:
-        return [False] * len(keys_values)
-    
-    results = []
-    for key, value in keys_values.items():
+    if cached_str:
         try:
-            success = await redis.set(key, value, ex=ttl)
-            results.append(success)
-        except Exception as e:
-            logger.error(f"Redis batch set error for key {key}: {e}")
-            results.append(False)
+            return json.loads(cached_str)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode JSON from cache key: {key}")
     
-    return results
+    return None
+
+async def set_cached_dict(key: str, value_dict: Dict[str, Any], ttl: int = 3600) -> bool:
+    """
+    Set a cached JSON dictionary in Redis.
+    
+    Args:
+        key: The cache key
+        value_dict: The dictionary to cache
+        ttl: Time-to-live in seconds (default: 1 hour)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        json_str = json.dumps(value_dict)
+        return await set_cached_feature(key, json_str, ttl)
+    except (TypeError, ValueError):
+        logger.error(f"Failed to encode dictionary to JSON for cache key: {key}")
+        return False
