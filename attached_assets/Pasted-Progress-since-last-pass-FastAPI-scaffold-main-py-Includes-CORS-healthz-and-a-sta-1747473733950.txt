@@ -1,0 +1,116 @@
+Progress since last pass
+
+    FastAPI scaffold (main.py)
+
+        Includes CORS, /healthz, and a startup hook that initialises the SQLAlchemy DB.
+
+        bid.routes router ports the old Flask endpoints almost 1-for-1.
+
+    BrandStrategy table
+
+        Schema (models.py) stores vpi_multiplier, priority, timestamps.
+
+        bidding_engine.apply_brand_strategy() now reads brand.strategy_config instead of a hard-coded dict.
+
+    Normalisation helper split out
+
+        normalize_bid_to_impression_value() cleanly applies the CPA/CPC/CPM formulas we discussed.
+
+    Start-up script
+
+        start_fastapi.sh added (uvicorn main:app …).
+
+    Health endpoint & CORS give you green probes and a demo-ready front door.
+
+Nice momentum! Below is a punch-list to close the remaining gaps.
+🔴 High-priority gaps
+
+    Legacy Node/Express still shipped (server/, proxy_bidding_api.js, .replit run = "npm run dev").
+
+        Why it matters: 2× runtime, 2× cold-start, duplicate validation logic.
+
+        Do next
+
+            Delete server/, proxy_bidding_api.js, drizzle.config.ts, vite server helpers.
+
+            Point the React app directly at /api/* (already exposed by FastAPI).
+
+            Update .replit →
+
+            run = "bash start_fastapi.sh"
+            build = []
+
+    No container / deployment spec yet
+
+        Add the multi-stage Dockerfile we outlined (Node build stage → copy /dist → Python slim).
+
+        Push one image to Replit Deploy → Reserved VM 1 vCPU / 4 GiB.
+
+    Migrations still split
+
+        Drizzle files linger but Alembic isn’t present.
+
+        Pick Alembic → alembic init db && alembic revision --autogenerate.
+
+        Generate TypeScript types from PostgreSQL with drizzle-kit introspect (read-only in TS world).
+
+🟠 Medium priority
+
+    Beta-posterior smoothing missing
+
+        Replace magic priors in get_historical_performance() with:
+
+        def beta_posterior(clicks, imps, a=3, b=97):
+            return (clicks + a) / (imps + a + b)
+
+        Use the posterior for both CTR and CVR cold-starts.
+
+    Redis feature cache not wired
+
+        Add REDIS_URL env var, connect with asyncio-redis or aioredis.
+
+        Cache placement_score, partner_quality, and model coefficients (nightly refresh).
+
+    Quality factor still a flat average
+
+        Stub an xgboost.Booster load (models/quality_model.json).
+
+        Multiplicative lift: final = base_value * model.predict(features)
+
+        Fallback to current mean when model missing.
+
+    Benchmark & property tests absent
+
+        Add tests/test_perf.py with pytest-benchmark; fail if 100 bids ≥ 25 ms.
+
+        Add one Hypothesis test around normalize_bid_to_impression_value().
+
+    Observability
+
+        Install opentelemetry-instrumentation-fastapi; export OTLP to Replit Logs.
+
+        Counter metric: bid_requests_total{model="CPA"} for quick sanity in Grafana.
+
+🟡 Low priority / polish
+
+    Function naming – apply_quality_factors(bid, ad_slot) takes a float not a bid object; rename first arg to base_value to avoid confusion.
+
+    README still references Flask/Node—update to FastAPI + Docker instructions.
+
+    Docker healthcheck – expose /healthz in Dockerfile (HEALTHCHECK CMD curl -f http://localhost:8000/healthz || exit 1).
+
+    Strategy admin UI – quick form in React to CRUD brand_strategy; no more DB psql needed.
+
+📌 Action checklist (one-day sprint)
+
+    Delete Node layer & update .replit run command.
+
+    Add Dockerfile + Reserved VM deploy.
+
+    Alembic migration unification; drop Drizzle migration folder.
+
+    Beta-posterior CTR/CVR function + unit test.
+
+    Redis cache for slot features & model JSON.
+
+    Performance benchmark test in CI.
