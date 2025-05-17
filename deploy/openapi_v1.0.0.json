@@ -1,0 +1,1315 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Multi-Model Ad Bidding Engine API",
+    "description": "A high-performance multi-model ad-bidding engine with FastAPI",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guide": {
+      "get": {
+        "summary": "Api Guide",
+        "operationId": "api_guide_guide_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bid/calculate": {
+      "post": {
+        "tags": [
+          "bid"
+        ],
+        "summary": "Calculate Bid",
+        "description": "Calculate bid value based on provided parameters.\n\nRequest body contains:\n- brand_id: ID of the brand/advertiser\n- bid_amount: Original bid amount\n- bid_type: Type of bid (CPA, CPC, CPM)\n- ad_slot: Information about the ad placement",
+        "operationId": "calculate_bid_api_bid_calculate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BidRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BidResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bid/history/{brand_id}": {
+      "get": {
+        "tags": [
+          "bid"
+        ],
+        "summary": "Get Bid History",
+        "description": "Get bid history for a specific brand.\n\nPath parameters:\n- brand_id: ID of the brand/advertiser\n\nQuery parameters:\n- limit: Number of records to return (default 10)",
+        "operationId": "get_bid_history_api_bid_history__brand_id__get",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Brand Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BidHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bid/strategy": {
+      "post": {
+        "tags": [
+          "bid"
+        ],
+        "summary": "Update Brand Strategy",
+        "description": "Create or update brand bidding strategy.\n\nRequest body contains:\n- brand_id: ID of the brand/advertiser\n- vpi_multiplier: Value-per-impression multiplier\n- priority: Priority level for the brand\n- strategy_config: Additional configuration as JSON",
+        "operationId": "update_brand_strategy_api_bid_strategy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandStrategyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bid/strategy/{brand_id}": {
+      "get": {
+        "tags": [
+          "bid"
+        ],
+        "summary": "Get Brand Strategy",
+        "description": "Get strategy configuration for a brand.\n\nPath parameters:\n- brand_id: ID of the brand/advertiser",
+        "operationId": "get_brand_strategy_api_bid_strategy__brand_id__get",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Brand Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandStrategyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "description": "Health check endpoint to verify API and database are operational.\nReturns 200 OK if everything is working.",
+        "operationId": "health_check_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roas/roas": {
+      "get": {
+        "tags": [
+          "roas"
+        ],
+        "summary": "Get Roas Prediction",
+        "description": "Get predicted ROAS (Return on Ad Spend) for a specific brand-partner-slot combination.\n\nThis endpoint is used for reporting and forecasting purposes.\n\nParameters:\n- brand_id: ID of the advertiser\n- partner_id: ID of the publisher partner\n- ad_slot_id: ID of the ad placement\n- device_type: Optional device type (0=unknown, 1=desktop, 2=mobile, 3=tablet)\n- creative_type: Optional creative type (0=unknown, 1=image, 2=video, 3=native)",
+        "operationId": "get_roas_prediction_api_roas_roas_get",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Brand Id"
+            }
+          },
+          {
+            "name": "partner_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Partner Id"
+            }
+          },
+          {
+            "name": "ad_slot_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ad Slot Id"
+            }
+          },
+          {
+            "name": "device_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Device Type"
+            }
+          },
+          {
+            "name": "creative_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Creative Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ROASPredictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roas/performance": {
+      "post": {
+        "tags": [
+          "roas"
+        ],
+        "summary": "Ingest Performance Event",
+        "description": "Ingest actual click, impression, and conversion events to update the feature store.\n\nThis endpoint receives performance data from the Partnerize platform to update\nthe historical data used for ROAS predictions. Events are deduplicated based on event_id.\n\nRequest body contains:\n- event_id: Unique identifier for deduplication\n- type: Type of event (impression, click, conversion)\n- brand_id: ID of the advertiser\n- partner_id: ID of the publisher partner\n- ad_slot_id: ID of the ad placement\n- timestamp: When the event occurred\n- metadata: Additional information about the event\n- revenue: Optional revenue amount (for conversions)",
+        "operationId": "ingest_performance_event_api_roas_performance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerformanceEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roas/retrain": {
+      "post": {
+        "tags": [
+          "roas"
+        ],
+        "summary": "Retrain Roas Model",
+        "description": "Trigger retraining of the ROAS prediction model using latest performance data.\n\nThis endpoint is typically called by a scheduled job but can also be\nmanually triggered for immediate retraining.",
+        "operationId": "retrain_roas_model_api_roas_retrain_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creatives/{creative_id}": {
+      "get": {
+        "tags": [
+          "creatives",
+          "creatives"
+        ],
+        "summary": "Get Creative",
+        "description": "Get details of a specific creative.\n\nPath parameters:\n- creative_id: ID of the creative",
+        "operationId": "get_creative_api_creatives__creative_id__get",
+        "parameters": [
+          {
+            "name": "creative_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the creative to retrieve",
+              "title": "Creative Id"
+            },
+            "description": "The ID of the creative to retrieve"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreativeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "creatives",
+          "creatives"
+        ],
+        "summary": "Update Creative Status",
+        "description": "Admin endpoint to approve or reject creatives.\n\nPath parameters:\n- creative_id: ID of the creative to update\n\nRequest body:\n- status: New status (\"pending\", \"approved\", or \"rejected\")\n- reject_reason: Optional reason for rejection",
+        "operationId": "update_creative_status_api_creatives__creative_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "creative_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the creative to update",
+              "title": "Creative Id"
+            },
+            "description": "The ID of the creative to update"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreativeStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreativeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creatives/": {
+      "get": {
+        "tags": [
+          "creatives",
+          "creatives"
+        ],
+        "summary": "List Creatives",
+        "description": "List creatives with optional filtering.\n\nQuery parameters:\n- brand_id: Filter by brand ID\n- status: Filter by status (pending, approved, rejected)\n- skip: Number of records to skip (pagination)\n- limit: Maximum number of records to return",
+        "operationId": "list_creatives_api_creatives__get",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Brand Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CreativeResponse"
+                  },
+                  "title": "Response List Creatives Api Creatives  Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdSlotInfo": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "AdSlotInfo",
+        "description": "Information about an ad placement slot"
+      },
+      "BidHistoryEntry": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ad_slot_id": {
+            "type": "integer",
+            "title": "Ad Slot Id"
+          },
+          "bid_amount": {
+            "type": "number",
+            "title": "Bid Amount"
+          },
+          "normalized_value": {
+            "type": "number",
+            "title": "Normalized Value"
+          },
+          "quality_factor": {
+            "type": "number",
+            "title": "Quality Factor"
+          },
+          "ctr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ctr"
+          },
+          "cvr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvr"
+          },
+          "bid_type": {
+            "type": "string",
+            "title": "Bid Type"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ad_slot_id",
+          "bid_amount",
+          "normalized_value",
+          "quality_factor",
+          "bid_type",
+          "timestamp"
+        ],
+        "title": "BidHistoryEntry",
+        "description": "Single bid history entry"
+      },
+      "BidHistoryResponse": {
+        "properties": {
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/BidHistoryEntry"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand_id",
+          "history"
+        ],
+        "title": "BidHistoryResponse",
+        "description": "Response model for bid history"
+      },
+      "BidRequest": {
+        "properties": {
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "bid_amount": {
+            "type": "number",
+            "title": "Bid Amount"
+          },
+          "bid_type": {
+            "type": "string",
+            "title": "Bid Type",
+            "description": "Type of bid: CPA, CPC, or CPM"
+          },
+          "ad_slot": {
+            "$ref": "#/components/schemas/AdSlotInfo"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand_id",
+          "bid_amount",
+          "bid_type",
+          "ad_slot"
+        ],
+        "title": "BidRequest",
+        "description": "Bid request model with all necessary parameters"
+      },
+      "BidResponse": {
+        "properties": {
+          "original_bid": {
+            "type": "number",
+            "title": "Original Bid"
+          },
+          "normalized_value": {
+            "type": "number",
+            "title": "Normalized Value"
+          },
+          "final_bid_value": {
+            "type": "number",
+            "title": "Final Bid Value"
+          },
+          "bid_type": {
+            "type": "string",
+            "title": "Bid Type"
+          },
+          "ctr": {
+            "type": "number",
+            "title": "Ctr"
+          },
+          "cvr": {
+            "type": "number",
+            "title": "Cvr"
+          },
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "ad_slot_id": {
+            "type": "integer",
+            "title": "Ad Slot Id"
+          },
+          "process_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Time Ms"
+          },
+          "quality_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original_bid",
+          "normalized_value",
+          "final_bid_value",
+          "bid_type",
+          "ctr",
+          "cvr",
+          "brand_id",
+          "ad_slot_id"
+        ],
+        "title": "BidResponse",
+        "description": "Response model for bid calculations"
+      },
+      "BrandStrategyRequest": {
+        "properties": {
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "vpi_multiplier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vpi Multiplier",
+            "default": 1.0
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority",
+            "default": 1
+          },
+          "strategy_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand_id"
+        ],
+        "title": "BrandStrategyRequest",
+        "description": "Request model for updating brand strategy"
+      },
+      "BrandStrategyResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "vpi_multiplier": {
+            "type": "number",
+            "title": "Vpi Multiplier"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "strategy_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "brand_id",
+          "vpi_multiplier",
+          "priority",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "BrandStrategyResponse",
+        "description": "Response model for brand strategy"
+      },
+      "BrandStrategyResult": {
+        "properties": {
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrandStrategyResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "title": "BrandStrategyResult",
+        "description": "Wrapper for brand strategy response"
+      },
+      "CreativeResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "creative_url": {
+            "type": "string",
+            "title": "Creative Url"
+          },
+          "creative_type": {
+            "type": "string",
+            "title": "Creative Type"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reject_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "brand_id",
+          "creative_url",
+          "creative_type",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CreativeResponse",
+        "description": "Response model for creative assets"
+      },
+      "CreativeStatusUpdate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "New status (pending, approved, rejected)"
+          },
+          "reject_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "CreativeStatusUpdate",
+        "description": "Request model for updating creative status (admin use only)"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "components": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Components"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "timestamp",
+          "components"
+        ],
+        "title": "HealthResponse",
+        "description": "Health check response model"
+      },
+      "PerformanceEventRequest": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Unique identifier for deduplication"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Type of event: impression, click, or conversion"
+          },
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "partner_id": {
+            "type": "integer",
+            "title": "Partner Id"
+          },
+          "ad_slot_id": {
+            "type": "integer",
+            "title": "Ad Slot Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "revenue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revenue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "type",
+          "brand_id",
+          "partner_id",
+          "ad_slot_id",
+          "timestamp"
+        ],
+        "title": "PerformanceEventRequest",
+        "description": "Request model for performance event ingestion"
+      },
+      "ROASPredictionResponse": {
+        "properties": {
+          "brand_id": {
+            "type": "integer",
+            "title": "Brand Id"
+          },
+          "partner_id": {
+            "type": "integer",
+            "title": "Partner Id"
+          },
+          "ad_slot_id": {
+            "type": "integer",
+            "title": "Ad Slot Id"
+          },
+          "predicted_vpi": {
+            "type": "number",
+            "title": "Predicted Vpi"
+          },
+          "estimated_roas": {
+            "type": "number",
+            "title": "Estimated Roas"
+          },
+          "actual_roas": {
+            "type": "number",
+            "title": "Actual Roas"
+          },
+          "historical_impressions": {
+            "type": "integer",
+            "title": "Historical Impressions"
+          },
+          "historical_revenue": {
+            "type": "number",
+            "title": "Historical Revenue"
+          },
+          "historical_cost": {
+            "type": "number",
+            "title": "Historical Cost"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand_id",
+          "partner_id",
+          "ad_slot_id",
+          "predicted_vpi",
+          "estimated_roas",
+          "actual_roas",
+          "historical_impressions",
+          "historical_revenue",
+          "historical_cost",
+          "timestamp"
+        ],
+        "title": "ROASPredictionResponse",
+        "description": "Response model for ROAS prediction"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

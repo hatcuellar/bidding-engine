@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from database import engine, Base
-from routes import bid, health, metrics, creatives, roas
+from routes import bid, health, creatives, roas
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +55,8 @@ async def api_guide():
 # Include routers
 app.include_router(bid.router, prefix="/api/bid", tags=["bid"])
 app.include_router(health.router, tags=["health"])
-app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
+# Uncomment when metrics module is ready
+# app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
 app.include_router(roas.router, prefix="/api/roas", tags=["roas"])
 app.include_router(creatives.router, tags=["creatives"])
 
