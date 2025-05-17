@@ -2,12 +2,15 @@ import logging
 import json
 import time
 from typing import Dict, Any, Optional, List, Tuple
+from sqlalchemy.orm import Session
 
 from utils.normalize import normalize_bid_to_impression_value
 from utils.beta_posterior import get_smoothed_rates
 from utils.quality_factors import apply_quality_factors
 from utils.redis_cache import get_cached_feature, set_cached_feature
 from utils.benchmarking import timed_execution, performance_tracker
+from utils.roas_predictor import get_roas_predictor
+from utils.portfolio_optimizer import get_portfolio_optimizer
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,7 @@ class BiddingEngine:
         self.default_ctr = 0.01  # 1% default CTR
         self.default_cvr = 0.03  # 3% default CVR
 
-    async def process_bid(self, bid_request: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_bid(self, bid_request: Dict[str, Any], db: Optional[Session] = None) -> Dict[str, Any]:
         """
         Process a bid request and return the calculated bid response.
 
@@ -33,7 +36,9 @@ class BiddingEngine:
                 - bid_type: Type of bid (CPA, CPC, CPM)
                 - ad_slot: Information about the ad placement
                 - strategy: Optional strategy configuration
-
+                - partner_id: Optional publisher partner identifier
+            db: Optional database session for real-time lookups
+            
         Returns:
             Dict with processed bid information
         """
@@ -44,6 +49,9 @@ class BiddingEngine:
         bid_type = bid_request.get("bid_type", "CPM")
         ad_slot = bid_request.get("ad_slot", {})
         strategy = bid_request.get("strategy")
+        partner_id = int(bid_request.get("partner_id", 0))
+        device_type = int(bid_request.get("device_type", 0))
+        creative_type = int(bid_request.get("creative_type", 0))
 
         logger.info(f"Processing bid request for brand {brand_id}, type {bid_type}, amount {bid_amount}")
 
@@ -68,6 +76,25 @@ class BiddingEngine:
         )
         ctr, cvr = perf_result
         
+        # Get ROAS prediction from ML model
+        roas_start = time.time()
+        roas_data = {
+            "brand_id": brand_id,
+            "partner_id": partner_id,
+            "ad_slot_id": slot_id,
+            "device_type": device_type,
+            "creative_type": creative_type,
+            "placement_score": ad_slot.get("placement_score", 50)
+        }
+        roas_predictor = get_roas_predictor()
+        predicted_vpi = roas_predictor.predict(roas_data)
+        roas_time = (time.time() - roas_start) * 1000
+        await performance_tracker.record_timing(
+            'roas_prediction', 
+            roas_time,
+            {'brand_id': brand_id, 'slot_id': slot_id, 'partner_id': partner_id}
+        )
+        
         # Normalize bid to impression value (CPM equivalent)
         norm_start = time.time()
         normalized_value = normalize_bid_to_impression_value(
@@ -76,6 +103,11 @@ class BiddingEngine:
             ctr=ctr,
             cvr=cvr
         )
+        
+        # Use ML-predicted VPI to adjust normalized value
+        # Start with 50/50 blend of traditional normalization and ML prediction
+        final_normalized_value = (normalized_value * 0.5) + (predicted_vpi * 0.5)
+        
         norm_time = (time.time() - norm_start) * 1000
         await performance_tracker.record_timing(
             'bid_normalization', 
@@ -87,10 +119,33 @@ class BiddingEngine:
         quality_result, quality_time = await timed_execution(
             'quality_factors',
             apply_quality_factors,
-            normalized_value, ad_slot, brand_id=brand_id,
+            final_normalized_value, ad_slot, brand_id=brand_id,
             metadata={'brand_id': brand_id, 'slot_id': slot_id}
         )
-        final_bid_value = quality_result
+        quality_adjusted_value = quality_result
+        
+        # Apply portfolio optimization (ROAS target constraints)
+        portfolio_start = time.time()
+        portfolio_optimizer = get_portfolio_optimizer()
+        
+        # Calculate expected cost and revenue for this impression
+        expected_cost = normalized_value / 1000.0  # CPM cost per impression
+        expected_revenue = predicted_vpi
+        
+        # Get bid score and throttle factor from portfolio optimizer
+        score, throttle_factor = await portfolio_optimizer.adjust_bid_for_portfolio(
+            brand_id, expected_revenue, expected_cost, db
+        )
+        
+        # Apply throttle factor to final bid value
+        final_bid_value = quality_adjusted_value * throttle_factor
+        
+        portfolio_time = (time.time() - portfolio_start) * 1000
+        await performance_tracker.record_timing(
+            'portfolio_optimization', 
+            portfolio_time,
+            {'brand_id': brand_id, 'throttle': throttle_factor}
+        )
         
         # Calculate total processing time
         total_time = (time.time() - start_time) * 1000
@@ -99,14 +154,20 @@ class BiddingEngine:
         response = {
             "original_bid": bid_amount,
             "normalized_value": normalized_value,
+            "predicted_vpi": predicted_vpi,
+            "final_normalized_value": final_normalized_value,
+            "quality_adjusted_value": quality_adjusted_value,
+            "throttle_factor": throttle_factor,
             "final_bid_value": final_bid_value,
             "bid_type": bid_type,
             "ctr": ctr,
             "cvr": cvr,
             "brand_id": brand_id,
+            "partner_id": partner_id,
             "ad_slot_id": ad_slot.get("id"),
-            "quality_factor": final_bid_value / normalized_value if normalized_value > 0 else 1.0,
-            "process_time_ms": round(total_time, 2)
+            "quality_factor": quality_adjusted_value / final_normalized_value if final_normalized_value > 0 else 1.0,
+            "process_time_ms": round(total_time, 2),
+            "expected_roas": expected_revenue / expected_cost if expected_cost > 0 else 0.0
         }
         
         # Record total processing time
