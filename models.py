@@ -1,0 +1,63 @@
+from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+
+from database import Base
+
+class BrandStrategy(Base):
+    """
+    Stores brand-specific bidding strategies and multipliers
+    """
+    __tablename__ = "brand_strategies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, index=True, nullable=False)
+    vpi_multiplier = Column(Float, nullable=False, default=1.0)
+    priority = Column(Integer, nullable=False, default=1)
+    strategy_config = Column(String, nullable=True)  # JSON string with strategy config
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    # Create an index on brand_id and is_active for faster lookups
+    __table_args__ = (
+        Index('idx_brand_active', brand_id, is_active),
+    )
+
+
+class BidHistory(Base):
+    """
+    Stores historical bid data for performance analysis and model training
+    """
+    __tablename__ = "bid_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, index=True, nullable=False)
+    ad_slot_id = Column(Integer, index=True, nullable=False)
+    bid_amount = Column(Float, nullable=False)
+    normalized_value = Column(Float, nullable=False)
+    quality_factor = Column(Float, nullable=False, default=1.0)
+    ctr = Column(Float, nullable=True)
+    cvr = Column(Float, nullable=True)
+    bid_type = Column(String, nullable=False)  # CPA, CPC, CPM
+    bid_timestamp = Column(DateTime, default=func.now(), index=True)
+    
+    # Create composite indexes for common queries
+    __table_args__ = (
+        Index('idx_brand_slot_time', brand_id, ad_slot_id, bid_timestamp),
+        Index('idx_bid_type_time', bid_type, bid_timestamp),
+    )
+
+
+class FeatureCache(Base):
+    """
+    Metadata about cached features in Redis
+    """
+    __tablename__ = "feature_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    feature_key = Column(String, nullable=False, unique=True, index=True)
+    last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
+    ttl_seconds = Column(Integer, nullable=False, default=86400)  # 24 hours default
+    is_active = Column(Boolean, default=True)
