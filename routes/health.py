@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from datetime import datetime
 import os
 
@@ -22,7 +23,7 @@ async def health_check(db: Session = Depends(get_db)):
     # Check database connection
     try:
         # Check database connection by executing a simple query
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         components["database"] = "ok"
     except Exception as e:
         components["database"] = "error"

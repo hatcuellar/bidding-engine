@@ -48,8 +48,9 @@ async def calculate_bid(
             if brand_strategy:
                 try:
                     strategy_config = {}
-                    if brand_strategy.strategy_config:
-                        strategy_config = json.loads(brand_strategy.strategy_config)
+                    strategy_config_str = brand_strategy.strategy_config
+                    if strategy_config_str and isinstance(strategy_config_str, str):
+                        strategy_config = json.loads(strategy_config_str)
                     
                     strategy_config.update({
                         "vpi_multiplier": brand_strategy.vpi_multiplier,
@@ -176,10 +177,11 @@ async def update_brand_strategy(
             
             if existing:
                 # Update existing strategy
-                existing.vpi_multiplier = strategy.vpi_multiplier
-                existing.priority = strategy.priority
+                # Access the SQLAlchemy model attributes properly
+                setattr(existing, "vpi_multiplier", strategy.vpi_multiplier)
+                setattr(existing, "priority", strategy.priority)
                 if strategy.strategy_config is not None:
-                    existing.strategy_config = strategy_config_str
+                    setattr(existing, "strategy_config", strategy_config_str)
                 db.commit()
                 return {"message": "Strategy updated successfully", "id": existing.id}
             else:
@@ -237,11 +239,12 @@ async def get_brand_strategy(
             }
             
             # Parse strategy_config if available
-            if strategy.strategy_config:
+            strategy_config_str = strategy.strategy_config
+            if strategy_config_str and isinstance(strategy_config_str, str):
                 try:
-                    result["strategy_config"] = json.loads(strategy.strategy_config)
+                    result["strategy_config"] = json.loads(strategy_config_str)
                 except:
-                    result["strategy_config"] = strategy.strategy_config
+                    result["strategy_config"] = strategy_config_str
                     
             return {"strategy": result}
             
