@@ -100,3 +100,26 @@ class EventLog(Base):
     __table_args__ = (
         Index('idx_event_id', event_id, unique=True),
     )
+
+
+class Creative(Base):
+    """
+    Ad creative assets requiring approval before serving
+    """
+    __tablename__ = "creatives"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, index=True, nullable=False)
+    creative_url = Column(String(1024), nullable=False)
+    creative_type = Column(String(50), nullable=False)  # image, video, html
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    status = Column(String(20), default="pending", nullable=False)  # pending, approved, rejected
+    reject_reason = Column(String(1024), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    reviewed_by = Column(String(255), nullable=True)  # Admin who reviewed
+
+    __table_args__ = (
+        Index('idx_brand_status', brand_id, status),
+    )

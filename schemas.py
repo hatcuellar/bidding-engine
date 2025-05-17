@@ -138,3 +138,35 @@ class PortfolioOptimizationConfig(BaseModel):
     min_target_roas: float = 2.0
     default_lambda: float = 0.5
     update_frequency_minutes: int = 60
+    
+    
+class CreativeResponse(BaseModel):
+    """Response model for creative assets"""
+    id: int
+    brand_id: int
+    creative_url: str
+    creative_type: str
+    width: Optional[int] = None
+    height: Optional[int] = None
+    status: str  # pending, approved, rejected
+    reject_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_by: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
+
+
+class CreativeUpdateRequest(BaseModel):
+    """Request model for updating creative details"""
+    creative_url: Optional[str] = None
+    creative_type: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    
+
+class CreativeStatusUpdate(BaseModel):
+    """Request model for updating creative status (admin use only)"""
+    status: str = Field(..., description="New status (pending, approved, rejected)")
+    reject_reason: Optional[str] = None

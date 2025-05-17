@@ -30,6 +30,24 @@ A high-performance FastAPI implementation of a multi-model ad bidding engine wit
 
 2. Update the `.env` file with your database and Redis connection information.
 
+#### Multi-Region Redis Configuration
+
+For production deployments across multiple regions (e.g., EU and US), we recommend setting up Redis with the following configuration to minimize cross-region latency:
+
+```
+# .env configuration for multi-region Redis
+# Primary Redis (same region as application)
+REDIS_URL=redis://primary-redis-host:6379/0
+# Secondary Redis (different region)
+REDIS_SECONDARY_URL=redis://secondary-redis-host:6379/0
+# Read preference (local_preferred or nearest_available)
+REDIS_READ_PREFERENCE=local_preferred
+# Cache invalidation strategy (local_only or cross_region)
+REDIS_INVALIDATION=cross_region
+```
+
+The bidding engine will prioritize local Redis for read operations while ensuring cache invalidation happens across all regions.
+
 ### Installation
 
 ```bash
