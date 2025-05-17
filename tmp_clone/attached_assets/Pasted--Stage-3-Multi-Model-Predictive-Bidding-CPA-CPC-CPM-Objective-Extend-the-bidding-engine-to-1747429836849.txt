@@ -1,0 +1,93 @@
+🟧 Stage 3: Multi-Model Predictive Bidding (CPA, CPC, CPM)
+🎯 Objective
+Extend the bidding engine to support CPA (fixed and %), CPC, and CPM models. Move away from a “highest bid wins” system and instead evaluate all bids—regardless of model—using predictive data science to determine which bid delivers the most value for both brand and partner.
+
+✅ 1. Supported Incentive Models
+Model
+Description
+Requirements
+CPA – Fixed
+e.g., £10 per conversion
+Must be flat, universal rate
+CPA – %
+e.g., 10% of order value
+No metadata-based commission logic
+CPC
+e.g., £0.50 per click
+Prone to click fraud, requires hygiene checks
+CPM
+e.g., £5 per 1,000 impressions
+Simple, can still use highest-bid logic
+
+⚠️ Brands must define min and max thresholds for each model type.
+
+✅ 2. Predictive Value Modeling
+For each brand-slot bid, the engine must calculate an estimated value per impression or per click, using predictive signals.
+For CPA:
+Estimated CVR × Payout = Value per impression
+For CPC:
+Estimated CTR × Payout = Value per impression
+For CPM:
+Bid ÷ 1000 = Value per impression
+
+✅ 3. Key Input Signals (Modeling Layer)
+Historical slot performance (CVR, CTR, AOV) by brand and partner
+
+
+Similar brand performance in similar slots
+
+
+Partner quality signals (Placement Verification Score, content suitability)
+
+
+Device type, creative type, category alignment
+
+
+Real-time pacing, spend, and competition context
+
+
+
+✅ 4. Bid Scoring & Decision Logic
+All bids across all models are normalized to an estimated value-per-impression score
+
+
+The engine ranks bids and selects the one with the highest predicted value
+
+
+Supports mixed-model competition (e.g., a CPA bid might beat a CPM bid if predicted conversion likelihood is high)
+
+
+
+✅ 5. Brand Optimization Settings (Optional)
+Brands may define bid strategy preferences, such as:
+“Maximize ROI”
+
+
+“Maximize Reach”
+
+
+“Minimize CPA/CPC”
+
+
+“Even budget pacing over time”
+
+
+“Target specific slots or partners”
+
+
+These can influence how the engine weighs predictions and ranks bids.
+
+✅ 6. Safeguards & Rules
+CPA model constraints:
+
+
+Must remain simple: no product metadata-based variation
+
+
+CPA/CPC + CPM coexistence:
+
+
+Brand can configure whether conversions from CPM/CPC traffic should trigger CPA payouts
+
+
+Default: CPA disabled on CPM/CPC-originated traffic unless explicitly enabled

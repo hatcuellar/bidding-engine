@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdBid - Multi-Model Predictive Bidding</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <div class="bg-gray-900 text-white w-64 flex-shrink-0 hidden md:flex md:flex-col">
+            <div class="p-4 flex items-center border-b border-gray-800">
+                <span class="text-2xl font-bold text-white">AdBid</span>
+                <span class="ml-2 text-blue-500 text-xs bg-blue-900 px-2 py-1 rounded-full">ML</span>
+            </div>
+            
+            <div class="py-4 flex-1 overflow-y-auto">
+                <div class="px-4 py-2 text-xs uppercase text-gray-400 font-semibold">Dashboard</div>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors bg-gray-800 text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span class="ml-3">Overview</span>
+                </a>
+                
+                <div class="px-4 py-2 mt-6 text-xs uppercase text-gray-400 font-semibold">Management</div>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors" id="nav-ad-slots">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 3L12 7 8 3"></path>
+                    </svg>
+                    <span class="ml-3">Ad Slots</span>
+                </a>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors" id="nav-brands">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 7h-9"></path>
+                        <path d="M14 17H5"></path>
+                        <circle cx="17" cy="17" r="3"></circle>
+                        <circle cx="7" cy="7" r="3"></circle>
+                    </svg>
+                    <span class="ml-3">Brands</span>
+                </a>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors" id="nav-partners">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span class="ml-3">Partners</span>
+                </a>
+                
+                <div class="px-4 py-2 mt-6 text-xs uppercase text-gray-400 font-semibold">Bidding</div>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors" id="nav-bidding">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    <span class="ml-3">Bidding</span>
+                </a>
+                <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors" id="nav-analytics">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="20" x2="12" y2="10"></line>
+                        <line x1="18" y1="20" x2="18" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="16"></line>
+                    </svg>
+                    <span class="ml-3">Analytics</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex flex-col flex-1 overflow-hidden">
+            <!-- Header -->
+            <header class="bg-white shadow-sm flex items-center justify-between px-6 py-3">
+                <div class="flex-1 md:pl-8">
+                    <h1 class="text-xl font-semibold text-gray-800" id="page-title">Dashboard</h1>
+                </div>
+                
+                <div class="flex items-center">
+                    <button class="text-gray-600 hover:text-gray-900 mx-3 relative focus:outline-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    
+                    <div class="relative">
+                        <button class="flex items-center focus:outline-none">
+                            <img class="h-8 w-8 rounded-full object-cover" src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="User avatar" />
+                            <span class="ml-2 hidden md:block font-medium">John Smith</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="ml-2 h-4 w-4 hidden md:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 overflow-y-auto bg-gray-50 p-6" id="main-content">
+                <!-- Dashboard Page -->
+                <div id="page-dashboard" class="page-content">
+                    <!-- Action Bar -->
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-semibold text-gray-800">Dashboard</h2>
+                            <p class="mt-1 text-sm text-gray-600">Multi-Model Predictive Bidding Analytics</p>
+                        </div>
+                        <div class="mt-4 md:mt-0 flex flex-col sm:flex-row gap-3">
+                            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                Export Data
+                            </button>
+                            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" id="init-demo-data">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                Initialize Demo Data
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stats Overview -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div class="bg-white shadow-sm rounded-lg p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-12 w-12 rounded-md flex items-center justify-center bg-blue-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h3 class="text-sm font-medium text-gray-500">Active Slots</h3>
+                                    <div class="flex items-baseline">
+                                        <p class="text-2xl font-semibold text-gray-900" id="dashboard-active-slots">0</p>
+                                        <p class="ml-2 text-sm text-green-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                            </svg>
+                                            <span>8%</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-sm rounded-lg p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-12 w-12 rounded-md flex items-center justify-center bg-green-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h3 class="text-sm font-medium text-gray-500">Avg. CPM</h3>
+                                    <div class="flex items-baseline">
+                                        <p class="text-2xl font-semibold text-gray-900" id="dashboard-avg-cpm">$0.00</p>
+                                        <p class="ml-2 text-sm text-green-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                            </svg>
+                                            <span>12.3%</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-sm rounded-lg p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-12 w-12 rounded-md flex items-center justify-center bg-purple-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h3 class="text-sm font-medium text-gray-500">Predicted CVR</h3>
+                                    <div class="flex items-baseline">
+                                        <p class="text-2xl font-semibold text-gray-900" id="dashboard-cvr">0.0%</p>
+                                        <p class="ml-2 text-sm text-red-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                            <span>2.1%</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-sm rounded-lg p-6">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-12 w-12 rounded-md flex items-center justify-center bg-yellow-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <h3 class="text-sm font-medium text-gray-500">ROAS</h3>
+                                    <div class="flex items-baseline">
+                                        <p class="text-2xl font-semibold text-gray-900" id="dashboard-roas">0.0</p>
+                                        <p class="ml-2 text-sm text-green-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                            </svg>
+                                            <span>5.7%</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Bid Model Distribution Chart -->
+                        <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+                            <div class="p-6 border-b border-gray-200">
+                                <h3 class="text-lg font-medium text-gray-900">Bid Model Distribution</h3>
+                                <p class="mt-1 text-sm text-gray-500">Distribution of bids by model type</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="h-64">
+                                    <canvas id="bidModelChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Predictive Value by Model Chart -->
+                        <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+                            <div class="p-6 border-b border-gray-200">
+                                <h3 class="text-lg font-medium text-gray-900">Value Prediction by Model</h3>
+                                <p class="mt-1 text-sm text-gray-500">Average value per impression across bid models</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="h-64">
+                                    <canvas id="valueChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Bid Evaluation Table -->
+                    <div class="mt-6 bg-white shadow-sm rounded-lg overflow-hidden">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-medium text-gray-900">Latest Bid Evaluations</h3>
+                            <p class="mt-1 text-sm text-gray-500">How different bid models are performing</p>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ad Slot</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bid Model</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Original Bid</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value/Impression</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200" id="bid-evaluations-table">
+                                    <!-- Placeholder for bid evaluation data -->
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap" colspan="6">
+                                            <div class="text-sm text-gray-500 text-center">No bid data available</div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const pageContents = document.querySelectorAll('.page-content');
+        const pageTitle = document.getElementById('page-title');
+        
+        // Navigation elements
+        const navItems = {
+            dashboard: document.querySelector('a[href="#"]'),
+            adSlots: document.getElementById('nav-ad-slots'),
+            brands: document.getElementById('nav-brands'),
+            partners: document.getElementById('nav-partners'),
+            bidding: document.getElementById('nav-bidding'),
+            analytics: document.getElementById('nav-analytics')
+        };
+        
+        // Charts
+        let bidModelChart;
+        let valueChart;
+        
+        // Demo data initialization
+        document.getElementById('init-demo-data').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/init_demo_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(data.message);
+                    loadDashboardData();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to initialize demo data'));
+                }
+            } catch (error) {
+                alert('Error: An error occurred while initializing demo data');
+                console.error('Error initializing demo data:', error);
+            }
+        });
+        
+        // Navigation
+        Object.entries(navItems).forEach(([page, navItem]) => {
+            navItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                // Update navigation styles
+                Object.values(navItems).forEach(item => {
+                    item.classList.remove('bg-gray-800', 'text-white');
+                    item.classList.add('text-gray-300');
+                });
+                
+                navItem.classList.add('bg-gray-800', 'text-white');
+                navItem.classList.remove('text-gray-300');
+                
+                // Update page content
+                pageContents.forEach(content => {
+                    content.classList.add('hidden');
+                });
+                
+                const pageId = `page-${page}`;
+                const pageContent = document.getElementById(pageId);
+                
+                if (pageContent) {
+                    pageContent.classList.remove('hidden');
+                    pageTitle.textContent = page.charAt(0).toUpperCase() + page.slice(1);
+                    
+                    // Load page-specific data
+                    if (page === 'dashboard') {
+                        loadDashboardData();
+                    }
+                }
+            });
+        });
+        
+        // Initialize charts
+        function initBidModelChart() {
+            const ctx = document.getElementById('bidModelChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (bidModelChart) {
+                bidModelChart.destroy();
+            }
+            
+            bidModelChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['CPA-Fixed', 'CPA-Percentage', 'CPC', 'CPM'],
+                    datasets: [{
+                        data: [30, 10, 25, 35],
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
+                            'rgba(245, 158, 11, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(16, 185, 129)',
+                            'rgb(139, 92, 246)',
+                            'rgb(245, 158, 11)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function initValueChart() {
+            const ctx = document.getElementById('valueChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (valueChart) {
+                valueChart.destroy();
+            }
+            
+            valueChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['CPA-Fixed', 'CPA-Percentage', 'CPC', 'CPM'],
+                    datasets: [{
+                        label: 'Avg. Value per Impression ($)',
+                        data: [0.012, 0.015, 0.008, 0.006],
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
+                            'rgba(245, 158, 11, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(16, 185, 129)',
+                            'rgb(139, 92, 246)',
+                            'rgb(245, 158, 11)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(3);
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                // Initialize charts
+                initBidModelChart();
+                initValueChart();
+                
+                // Fetch ad slots and bids data
+                const adSlotsResponse = await fetch('/api/ad_slots');
+                const adSlotsData = await adSlotsResponse.json();
+                
+                // Update dashboard stats
+                const activeSlots = adSlotsData.filter(slot => slot.status === 'active').length;
+                document.getElementById('dashboard-active-slots').textContent = activeSlots;
+                
+                // Calculate average CPM
+                const slotsWithBids = adSlotsData.filter(slot => slot.current_bid !== null);
+                let avgCpm = 0;
+                
+                if (slotsWithBids.length > 0) {
+                    const totalCpm = slotsWithBids.reduce((sum, slot) => sum + slot.current_bid, 0);
+                    avgCpm = totalCpm / slotsWithBids.length;
+                }
+                
+                document.getElementById('dashboard-avg-cpm').textContent = `$${avgCpm.toFixed(2)}`;
+                
+                // Sample data for CVR and ROAS
+                document.getElementById('dashboard-cvr').textContent = '3.2%';
+                document.getElementById('dashboard-roas').textContent = '2.7';
+                
+                // Update bid evaluations table
+                const bidEvaluationsTable = document.getElementById('bid-evaluations-table');
+                
+                if (adSlotsData.length > 0) {
+                    // Clear the table
+                    bidEvaluationsTable.innerHTML = '';
+                    
+                    // For each ad slot, evaluate bids (simulated)
+                    for (const slot of adSlotsData.slice(0, 5)) {
+                        const row = document.createElement('tr');
+                        
+                        const brandName = `TechGiant Inc.`;
+                        const modelName = 'CPM';
+                        const originalBid = 5.50;
+                        const valuePerImpression = 0.0055;
+                        const status = 'Winner';
+                        
+                        row.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="text-sm font-medium text-gray-900">${brandName}</div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">${slot.name}</div>
+                                <div class="text-xs text-gray-500">${slot.partner_name}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">${modelName}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">$${originalBid.toFixed(2)}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-600">$${valuePerImpression.toFixed(4)}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    ${status}
+                                </span>
+                            </td>
+                        `;
+                        
+                        bidEvaluationsTable.appendChild(row);
+                    }
+                } else {
+                    bidEvaluationsTable.innerHTML = `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap" colspan="6">
+                                <div class="text-sm text-gray-500 text-center">No bid data available</div>
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                alert('Error: Failed to load dashboard data');
+            }
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            // Default to dashboard view
+            loadDashboardData();
+        });
+    </script>
+</body>
+</html>

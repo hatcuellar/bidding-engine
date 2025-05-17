@@ -1,0 +1,240 @@
+Quick wins first
+Collapse to one service
+
+Port the small Flask layer to FastAPI (router = APIRouter()); mount the React build with StaticFiles.
+
+Benefit: async I/O, auto-generated Swagger, one container → no Node⇄Python hop.
+
+Move strategy multipliers into the DB
+
+New table brand_strategy(id, name, vpi_multiplier, priority).
+
+Seed values from the current STRATEGY_MULTIPLIERS dict.
+
+Expose admin endpoint POST /strategies so ops can tweak without redeploy.
+
+1. Architecture & runtime
+Why merge Node + Python?
+
+Two web servers add ~4 ms network hop + double cold-start risk.
+
+Express does only CRUD; FastAPI can cover that with 3 routes.
+
+Migration path
+
+Create main.py:
+
+python
+Copy
+Edit
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from bid.routes import router as bid_router
+
+app = FastAPI(title="AdBid Optimizer")
+app.include_router(bid_router, prefix="/api")
+app.mount("/", StaticFiles(directory="client/dist", html=True), name="static")
+Replace Node proxy with direct local call:
+fetch("/api/score", … )
+
+Delete server/ after tests pass.
+
+2. Data layer
+Unify migrations
+
+Pick Alembic (Python) for versioning; generate Drizzle types from the DB (drizzle-kit introspect).
+
+Schema tweaks
+
+brand.strategy → foreign-key to brand_strategy.
+
+Index performance(slot_id, brand_id) for faster CTR/CVR lookup (currently full scan).
+
+Store β-prior counts: add columns prior_clicks, prior_imps to Performance.
+
+3. Bidding logic
+CTR/CVR estimation
+
+Replace hard-coded 0.6/0.4 blend:
+
+python
+Copy
+Edit
+def beta_posterior(imps, clicks, alpha=3, beta=97):
+    return (clicks + alpha) / (imps + alpha + beta)
+Prior (3, 97) ≈ 3 % baseline; adjust per vertical.
+
+Quality factor
+
+Train XGBoost on:
+
+placement_score
+
+partner_quality
+
+device_type
+
+creative_type
+
+hour_of_day
+
+Dump model.json; load once at startup.
+
+Threshold enforcement
+
+Keep all rules in bidding_engine.evaluate_bids().
+
+Remove duplicate checks in Node (after merge, no duplication anyway).
+
+4. Performance & caching
+Redis feature cache
+
+Key: slot:{slot_id}:features → JSON of placement & partner features.
+
+TTL: 300 s, refresh on write.
+
+Code:
+
+python
+Copy
+Edit
+import aioredis
+redis = aioredis.from_url(os.getenv("REDIS_URL"))
+Benchmark guardrail
+
+Add tests/test_perf.py:
+
+python
+Copy
+Edit
+def test_scoring_speed(benchmark, bid_bundle):
+    result = benchmark(score_bundle, bid_bundle)
+    assert result < 0.025   # 25 ms for 100 bids
+Run with pytest --benchmark-only.
+
+5. Retraining & workflows
+Nightly Workflow (Replit)
+
+Schedule: 02:00 UTC, file retrain_cvr.py.
+
+Steps:
+
+Query performance last 30 days.
+
+Fit XGBoost (max_depth=6, n_estimators=200).
+
+Save models/cvr_model.json.
+
+redis.set("cvr_model", blob).
+
+Dry-run validation
+
+Immediately call /api/score with canned bids; abort deploy if it raises.
+
+6. Testing & CI
+Coverage bump
+
+Property-based tests with Hypothesis:
+
+python
+Copy
+Edit
+@given(amount=st.decimals(1, 100), ctr=st.floats(0, .2))
+def test_cpc_normalisation(amount, ctr):
+    vpi = normalise_cpc(amount, ctr)
+    assert vpi == approx(amount * ctr)
+GitHub Action
+
+yaml
+Copy
+Edit
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Back-end tests
+        run: |
+          pip install poetry
+          poetry install
+          pytest --benchmark-skip
+      - name: Front-end tests
+        run: |
+          corepack enable
+          pnpm i
+          pnpm test
+      - name: Build container
+        run: docker build -t adbids:latest .
+7. Observability
+OpenTelemetry (opentelemetry-instrumentation-fastapi)
+
+Trace IDs from /api/score to Redis + Postgres.
+
+Export to OTLP → Grafana Tempo (or Replit Logs until you outgrow it).
+
+Prometheus counters
+
+bid_requests_total{model="CPA"}.
+
+latency_bucket for /score to watch P95.
+
+8. Containerisation & deploy
+Dockerfile (multi-stage)
+
+Dockerfile
+Copy
+Edit
+FROM node:20 AS build-frontend
+WORKDIR /web
+COPY client/ .
+RUN corepack enable && pnpm i && pnpm run build
+
+FROM python:3.12-slim AS server
+WORKDIR /app
+COPY pyproject.toml poetry.lock .
+RUN pip install --no-cache-dir poetry && poetry install --no-dev
+COPY --from=build-frontend /web/dist ./static
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+Replit Deploy settings
+
+Reserved VM: 1 vCPU / 4 GiB.
+
+Health check: /healthz, 5 s timeout, 30 s grace.
+
+Min instances: 1 to kill cold-start; max 3 for burst.
+
+9. Front-end polish (nice-to-haves)
+Replace manual fetches with React Query for auto-refetch + caching.
+
+Add heat-map (Recharts) “Value per Impression vs Hour”:
+
+Data endpoint /api/metrics/vpi?granularity=hour.
+
+Show quality-factor breakdown tooltip: placement, partner, device.
+
+📌 Prioritised todo list (print & stick on monitor)
+Merge into FastAPI (kills cross-service latency).
+
+Move strategy config to DB + admin endpoint.
+
+Redis cache + β-posterior CTR/CVR → slash DB reads & cold-start bias.
+
+Nightly retrain Workflow with validation step.
+
+OpenTelemetry + benchmark test to catch regressions.
+
+Containerise with multi-stage Dockerfile; update Replit Deploy.
+
+Complete those six and you’ll have:
+
+Single, async, autoscalable service (FastAPI).
+
+Data-driven strategy knobs controllable from the UI/DB.
+
+Predictive models retrained nightly and cached in Redis.
+
+Observability & CI safeguards against latency or logic drift.
+
+Seamless path to multi-cloud if traffic or cost explodes.
