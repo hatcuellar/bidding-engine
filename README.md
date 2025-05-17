@@ -210,7 +210,26 @@ pytest
 
 # Run benchmarks
 pytest tests/test_perf.py -v
+
+# Run ROAS lift replay test
+python scripts/replay_test.py --days=7 --brands=all --verbose
 ```
+
+## Scheduled Workflows
+
+The bidding engine relies on several automated scheduled workflows to maintain optimal performance:
+
+| Workflow | Schedule | Description |
+|----------|----------|-------------|
+| `retrain_models` | Daily at 01:00 UTC | Retrains all XGBoost models with latest performance data |
+| `lambda_tuning` | Daily at 02:00 UTC | Computes and updates λ factors per brand using Lagrangian optimization |
+| `budget_reset` | Daily at 00:00 UTC | Resets daily spent budgets for all brands |
+| `cache_cleanup` | Every 6 hours | Expires and cleans up stale feature caches |
+| `backup_database` | Daily at 04:00 UTC | Creates database backups and uploads to storage |
+| `performance_metrics` | Every 30 minutes | Updates ROAS metrics and throttle factors |
+| `drift_monitoring` | Hourly | Checks for model drift and lambda value outliers |
+
+These workflows can be configured in your deployment environment's job scheduler (e.g., cron jobs or Kubernetes CronJobs).
 
 ## Contributing
 
