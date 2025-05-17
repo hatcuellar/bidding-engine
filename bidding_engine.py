@@ -3,7 +3,7 @@ import json
 from typing import Dict, Any, Optional, List, Tuple
 
 from utils.normalize import normalize_bid_to_impression_value
-from utils.beta_posterior import beta_posterior
+from utils.beta_posterior import get_smoothed_rates
 from utils.quality_factors import apply_quality_factors
 from utils.redis_cache import get_cached_feature, set_cached_feature
 
@@ -127,18 +127,36 @@ class BiddingEngine:
             except (json.JSONDecodeError, TypeError):
                 logger.warning(f"Failed to parse cached performance data for {cache_key}")
         
-        # If not in cache, calculate from historical data
-        # In a real implementation, this would query the database
-        # Here, using reasonable defaults with beta smoothing
+        # In production, these values would be retrieved from the database
+        # based on historical performance for this brand/slot combination
+        # The following would query your BidHistory table
         
-        # Mock values for demonstration - in production, retrieve actual values
-        impressions = 100  # Example value
-        clicks = 2  # Example value
-        conversions = 1  # Example value
+        # For demonstration purposes, adjust these values based on brand_id and slot_id
+        # to simulate variability in performance across different advertisers and slots
+        base_impressions = 100 + (brand_id % 10) * 50  # Example value
+        base_clicks = 2 + (brand_id % 5)  # Example value
+        base_conversions = max(1, brand_id % 3)  # Example value
         
-        # Apply beta posterior smoothing
-        smoothed_ctr = beta_posterior(clicks, impressions)
-        smoothed_cvr = beta_posterior(conversions, clicks) if clicks > 0 else beta_posterior(0, 1)
+        # Adjust based on slot_id to simulate slot performance variations
+        slot_multiplier = 1.0 + (slot_id % 5) * 0.2  # 1.0 to 1.8
+        
+        impressions = int(base_impressions * slot_multiplier)
+        clicks = min(impressions, int(base_clicks * slot_multiplier))
+        conversions = min(clicks, int(base_conversions * slot_multiplier))
+        
+        # Apply beta posterior smoothing using our implementation
+        smoothed_ctr, smoothed_cvr = get_smoothed_rates(
+            clicks=clicks,
+            impressions=impressions,
+            conversions=conversions,
+            # Customizable priors for different advertisers or categories
+            ctr_prior=(1.0, 10.0),  # Expect ~9% CTR
+            cvr_prior=(1.0, 20.0)   # Expect ~5% CVR
+        )
+        
+        # Ensure values are within reasonable bounds
+        smoothed_ctr = max(0.001, min(0.5, smoothed_ctr))  # Limit to 0.1% to 50%
+        smoothed_cvr = max(0.001, min(0.3, smoothed_cvr))  # Limit to 0.1% to 30%
         
         # Cache the results
         await set_cached_feature(cache_key, json.dumps({
