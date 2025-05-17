@@ -31,8 +31,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OpenTelemetry instrumentation is disabled for now
-# FastAPIInstrumentor.instrument_app(app)
+# Set up OpenTelemetry and Prometheus instrumentation
+from utils.observability import setup_opentelemetry, setup_prometheus
+setup_opentelemetry(app)
+metrics = setup_prometheus(app)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory="static"), name="static")

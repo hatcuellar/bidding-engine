@@ -1,21 +1,6 @@
-# Multi-stage build for the ad-bidding engine
+# Optimized build for the ad-bidding engine FastAPI application
 
-# Stage 1: Build frontend assets (if needed)
-FROM node:20-alpine AS frontend-build
-WORKDIR /app
-# Only copy what's needed for the frontend build
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY vite.config.ts ./
-COPY tailwind.config.ts ./
-COPY postcss.config.js ./
-COPY ./client ./client
-
-# Install dependencies and build frontend
-RUN npm ci
-RUN npm run build
-
-# Stage 2: Python application
+# Single-stage Python application build
 FROM python:3.11-slim
 
 # Set working directory
@@ -50,8 +35,8 @@ RUN pip install --no-cache-dir -e .
 # Copy application code
 COPY . .
 
-# Copy frontend build from stage 1
-COPY --from=frontend-build /app/dist ./static
+# Create static directory for API documentation
+RUN mkdir -p /app/static
 
 # Apply migrations at build time (optional - can be done at runtime)
 # RUN alembic upgrade head
