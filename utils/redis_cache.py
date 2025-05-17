@@ -40,7 +40,7 @@ async def initialize_redis_pool() -> bool:
     
     try:
         # Create connection pool
-        redis_pool = aioredis.from_url(
+        redis_pool = redis.from_url(
             redis_url,
             encoding="utf-8",
             decode_responses=True
