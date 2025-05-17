@@ -112,6 +112,7 @@ class ROASPredictionResponse(BaseModel):
 
 class PerformanceEventRequest(BaseModel):
     """Request model for performance event ingestion"""
+    event_id: str = Field(..., description="Unique identifier for deduplication")
     type: str = Field(..., description="Type of event: impression, click, or conversion")
     brand_id: int
     partner_id: int

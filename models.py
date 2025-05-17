@@ -16,6 +16,11 @@ class BrandStrategy(Base):
     vpi_multiplier = Column(Float, nullable=False, default=1.0)
     priority = Column(Integer, nullable=False, default=1)
     strategy_config = Column(String, nullable=True)  # JSON string with strategy config
+    daily_cap = Column(Float, nullable=False, default=1000.0)  # Daily budget cap in dollars
+    total_cap = Column(Float, nullable=False, default=50000.0)  # Total budget cap in dollars
+    spent_today = Column(Float, nullable=False, default=0.0)  # Amount spent today
+    spent_total = Column(Float, nullable=False, default=0.0)  # Total amount spent
+    target_roas = Column(Float, nullable=False, default=2.0)  # Target ROAS
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
@@ -76,3 +81,22 @@ class FeatureCache(Base):
     last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
     ttl_seconds = Column(Integer, nullable=False, default=86400)  # 24 hours default
     is_active = Column(Boolean, default=True)
+
+
+class EventLog(Base):
+    """
+    Log of processed performance events for deduplication
+    """
+    __tablename__ = "event_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(String(255), nullable=False, unique=True, index=True)
+    event_type = Column(String(50), nullable=False)
+    brand_id = Column(Integer, index=True, nullable=False)
+    partner_id = Column(Integer, index=True, nullable=False)
+    ad_slot_id = Column(Integer, index=True, nullable=False)
+    processed_at = Column(DateTime, default=func.now(), index=True)
+    
+    __table_args__ = (
+        Index('idx_event_id', event_id, unique=True),
+    )

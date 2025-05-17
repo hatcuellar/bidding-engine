@@ -106,12 +106,13 @@ class ROASPredictor:
         
         return np.array([features], dtype=np.float32)
     
-    def predict(self, data: Dict[str, Any]) -> float:
+    def predict(self, data: Dict[str, Any], db: Optional[Session] = None) -> float:
         """
         Predict expected ROAS for a bid request.
         
         Args:
             data: Dictionary containing bid request data
+            db: Optional database session for checking impression counts
             
         Returns:
             float: Predicted value per impression
@@ -127,23 +128,94 @@ class ROASPredictor:
             # Prepare features
             features = self.prepare_features(data)
             
-            # Make prediction
+            # Make prediction with the model
             dmatrix = xgb.DMatrix(features)
             prediction = self.model.predict(dmatrix)
             
-            # Return the predicted value (first element in array)
-            vpi = float(prediction[0])
+            # Get the predicted value (first element in array)
+            model_vpi = float(prediction[0])
+            
+            # Apply Bayesian smoothing for cold-start cases
+            final_vpi = self.apply_bayesian_smoothing(data, model_vpi, db)
             
             # Apply reasonability constraints
-            vpi = max(0.001, min(10.0, vpi))  # Between 0.1 cent and $10
+            final_vpi = max(0.001, min(10.0, final_vpi))  # Between 0.1 cent and $10
             
             logger.debug(f"Predicted VPI for brand_id={data.get('brand_id')}, "
-                         f"ad_slot_id={data.get('ad_slot_id')}: {vpi:.4f}")
+                        f"ad_slot_id={data.get('ad_slot_id')}: {final_vpi:.4f}")
             
-            return vpi
+            return final_vpi
         except Exception as e:
             logger.error(f"Error in ROAS prediction: {e}")
             return default_vpi
+            
+    def apply_bayesian_smoothing(self, data: Dict[str, Any], model_vpi: float, db: Optional[Session] = None) -> float:
+        """
+        Apply Bayesian smoothing to model predictions for cold-start cases.
+        
+        Smoothing formula: 
+        smoothed_vpi = (prior_weight * prior_vpi + impression_count * model_vpi) / (prior_weight + impression_count)
+        
+        Args:
+            data: Dictionary containing bid request data
+            model_vpi: Raw model prediction
+            db: Optional database session
+            
+        Returns:
+            float: Smoothed VPI value
+        """
+        # Prior parameters
+        prior_weight = 100.0  # Equivalent to 100 "virtual" impressions
+        prior_vpi = 0.02      # Prior belief about average VPI ($20 CPM)
+        
+        # Default to 0 impressions if we don't have a db session
+        impression_count = 0
+        
+        # Get actual impression count for this brand-partner-slot combination if possible
+        if db is not None:
+            try:
+                brand_id = data.get('brand_id', 0)
+                partner_id = data.get('partner_id', 0)
+                ad_slot_id = data.get('ad_slot_id', 0)
+                
+                # Look back 30 days
+                thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+                
+                query = text("""
+                SELECT SUM(impressions) as total_impressions
+                FROM bid_history
+                WHERE brand_id = :brand_id
+                  AND partner_id = :partner_id
+                  AND ad_slot_id = :ad_slot_id
+                  AND bid_timestamp >= :start_date
+                """)
+                
+                result = db.execute(query, {
+                    "brand_id": brand_id,
+                    "partner_id": partner_id,
+                    "ad_slot_id": ad_slot_id,
+                    "start_date": thirty_days_ago
+                })
+                
+                row = result.fetchone()
+                if row and row.total_impressions:
+                    impression_count = min(int(row.total_impressions), 10000)  # Cap at 10k to avoid extreme weights
+                
+                logger.debug(f"Found {impression_count} impressions for brand={brand_id}, partner={partner_id}, slot={ad_slot_id}")
+                
+            except Exception as e:
+                logger.error(f"Error getting impression count for Bayesian smoothing: {e}")
+                # Continue with default impression_count = 0
+        
+        # Apply Bayesian smoothing formula
+        smoothed_vpi = (prior_weight * prior_vpi + impression_count * model_vpi) / (prior_weight + impression_count)
+        
+        # Log smoothing effect for debugging
+        if impression_count < 100:
+            logger.debug(f"Cold start case: Brand={data.get('brand_id')}, Partner={data.get('partner_id')}, "
+                        f"Imps={impression_count}, Model VPI={model_vpi:.4f}, Smoothed VPI={smoothed_vpi:.4f}")
+        
+        return smoothed_vpi
     
     def train(self, db: Session) -> bool:
         """

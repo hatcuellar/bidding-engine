@@ -165,6 +165,66 @@ class PortfolioOptimizer:
         # Always update in-memory cache
         with _lambda_lock:
             _lambda_factors[brand_id] = lambda_value
+            
+    async def compute_optimal_lambda(self, brand_id: int, target_roas: float, db: Session) -> float:
+        """
+        Compute the optimal lambda factor for a brand based on target ROAS.
+        
+        Lambda is computed using the Lagrangian formula:
+        λ = (target_roas * cost_sum - rev_sum) / cost_sum
+        
+        Args:
+            brand_id: Brand identifier
+            target_roas: Target ROAS for the brand
+            db: Database session
+            
+        Returns:
+            Computed lambda value
+        """
+        try:
+            # Get revenue and cost data for the past 7 days
+            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+            
+            query = text("""
+            SELECT 
+                SUM(revenue) as total_revenue,
+                SUM(cost) as total_cost
+            FROM 
+                bid_history
+            WHERE 
+                brand_id = :brand_id AND
+                bid_timestamp >= :start_date
+            """)
+            
+            result = db.execute(query, {
+                "brand_id": brand_id,
+                "start_date": seven_days_ago
+            })
+            row = result.fetchone()
+            
+            if not row or not row.total_cost or row.total_cost < 1.0:
+                # Not enough data, use default lambda
+                logger.warning(f"Insufficient data to compute lambda for brand {brand_id}")
+                return self.default_lambda
+            
+            total_revenue = row.total_revenue or 0.0
+            total_cost = row.total_cost or 1.0  # Avoid division by zero
+            
+            # Compute lambda using Lagrangian formula
+            # λ = (target_roas * cost_sum - rev_sum) / cost_sum
+            lambda_value = (target_roas * total_cost - total_revenue) / total_cost
+            
+            # Ensure lambda is non-negative and within reasonable bounds
+            lambda_value = max(0.1, min(10.0, lambda_value))
+            
+            logger.info(f"Computed optimal lambda for brand {brand_id}: {lambda_value:.4f} "
+                       f"(target ROAS: {target_roas:.2f}, actual: {total_revenue / total_cost:.2f})")
+            
+            return lambda_value
+            
+        except Exception as e:
+            logger.error(f"Error computing optimal lambda: {e}")
+            return self.default_lambda
     
     async def adjust_bid_for_portfolio(
         self,
@@ -305,17 +365,8 @@ class PortfolioOptimizer:
                     # Slightly under target
                     throttle_factor = 0.8
                 
-                # Update lambda factor
-                # If ROAS is below target, increase lambda to reduce bid prices
-                current_lambda = await self.get_lambda_factor(brand_id)
-                new_lambda = current_lambda
-                
-                if current_roas < target_roas * 0.8:
-                    # Increase lambda to reduce bids
-                    new_lambda = min(10.0, current_lambda * 1.2)
-                elif current_roas > target_roas * 1.2:
-                    # Decrease lambda to increase bids
-                    new_lambda = max(0.1, current_lambda * 0.9)
+                # Compute optimal lambda using Lagrangian method
+                optimal_lambda = await self.compute_optimal_lambda(brand_id, target_roas, db)
                 
                 # Update ledger and lambda
                 await self.update_brand_ledger(brand_id, {
@@ -324,11 +375,11 @@ class PortfolioOptimizer:
                     "throttle_factor": throttle_factor
                 })
                 
-                await self.update_lambda_factor(brand_id, new_lambda)
+                await self.update_lambda_factor(brand_id, optimal_lambda)
                 
                 logger.info(f"Updated metrics for brand {brand_id}: "
                             f"ROAS={current_roas:.2f}/{target_roas:.2f}, "
-                            f"throttle={throttle_factor:.2f}, lambda={new_lambda:.2f}")
+                            f"throttle={throttle_factor:.2f}, lambda={optimal_lambda:.2f}")
         
         except Exception as e:
             logger.error(f"Error updating performance metrics: {e}")

@@ -116,9 +116,10 @@ async def ingest_performance_event(
     Ingest actual click, impression, and conversion events to update the feature store.
     
     This endpoint receives performance data from the Partnerize platform to update
-    the historical data used for ROAS predictions.
+    the historical data used for ROAS predictions. Events are deduplicated based on event_id.
     
     Request body contains:
+    - event_id: Unique identifier for deduplication
     - type: Type of event (impression, click, conversion)
     - brand_id: ID of the advertiser
     - partner_id: ID of the publisher partner
@@ -128,6 +129,19 @@ async def ingest_performance_event(
     - revenue: Optional revenue amount (for conversions)
     """
     try:
+        # Check if this event has already been processed (deduplicate)
+        existing_event = db.query(EventLog).filter(
+            EventLog.event_id == event.event_id
+        ).first()
+        
+        if existing_event:
+            logger.info(f"Duplicate event detected, skipping: {event.event_id}")
+            return {
+                "status": "success", 
+                "message": "Event already processed",
+                "duplicate": True
+            }
+        
         # Find the most recent bid for this combination
         recent_bid = db.query(BidHistory).filter(
             BidHistory.brand_id == event.brand_id,
@@ -192,9 +206,24 @@ async def ingest_performance_event(
             if recent_bid.clicks > 0:
                 recent_bid.cvr = recent_bid.conversions / recent_bid.clicks
         
+        # Log this event to prevent reprocessing (deduplicate future attempts)
+        event_log = EventLog(
+            event_id=event.event_id,
+            event_type=event.type,
+            brand_id=event.brand_id,
+            partner_id=event.partner_id,
+            ad_slot_id=event.ad_slot_id
+        )
+        db.add(event_log)
+        
+        # Commit all changes
         db.commit()
         
-        return {"status": "success", "message": "Performance event processed"}
+        return {
+            "status": "success", 
+            "message": "Performance event processed",
+            "duplicate": False
+        }
     
     except Exception as e:
         db.rollback()
