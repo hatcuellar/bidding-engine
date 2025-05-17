@@ -81,7 +81,7 @@ def setup_prometheus(app: FastAPI) -> None:
         instrumentator.add(metrics.dependency_requests())
         
         # Add custom metrics for bidding engine
-        from prometheus_client import Counter, Histogram
+        from prometheus_client import Counter, Histogram, Gauge
         
         # Counter for bids by type
         bids_by_type = Counter(
@@ -98,9 +98,35 @@ def setup_prometheus(app: FastAPI) -> None:
             labelnames=["bid_type"]
         )
         
+        # Lambda values by brand - tracks the lambda factors used for bid scoring
+        brand_lambda = Histogram(
+            name="brand_lambda_values",
+            documentation="Distribution of lambda values by brand",
+            buckets=(0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0),
+            labelnames=["brand_id"]
+        )
+        
+        # Global lambda average and variance tracking for outlier detection
+        lambda_stats = Gauge(
+            name="lambda_statistics",
+            documentation="Global statistics for lambda values",
+            labelnames=["stat_type"]  # mean, median, stddev
+        )
+        
+        # ROAS performance tracking
+        roas_performance = Histogram(
+            name="roas_performance",
+            documentation="Distribution of ROAS values by brand",
+            buckets=(0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 10.0),
+            labelnames=["brand_id"]
+        )
+        
         # Add custom metrics to collectors
         instrumentator.registry.register(bids_by_type)
         instrumentator.registry.register(bid_values)
+        instrumentator.registry.register(brand_lambda)
+        instrumentator.registry.register(lambda_stats)
+        instrumentator.registry.register(roas_performance)
         
         # Instrument app and expose metrics endpoint
         instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
@@ -110,7 +136,10 @@ def setup_prometheus(app: FastAPI) -> None:
         # Export metrics objects for use in the application
         return {
             "bids_by_type": bids_by_type,
-            "bid_values": bid_values
+            "bid_values": bid_values,
+            "brand_lambda": brand_lambda,
+            "lambda_stats": lambda_stats,
+            "roas_performance": roas_performance
         }
     except ImportError as e:
         logger.warning(f"Prometheus packages not available: {e}")

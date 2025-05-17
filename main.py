@@ -35,8 +35,8 @@ app.add_middleware(
 from utils.observability import setup_opentelemetry, setup_prometheus
 setup_opentelemetry(app)
 
-# Disable Prometheus metrics for now until package is installed
-# metrics = setup_prometheus(app)
+# Set up Prometheus metrics
+metrics = setup_prometheus(app)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory="static"), name="static")

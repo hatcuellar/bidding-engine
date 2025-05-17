@@ -166,6 +166,15 @@ class PortfolioOptimizer:
         with _lambda_lock:
             _lambda_factors[brand_id] = lambda_value
             
+        # Record lambda in Prometheus metrics if available
+        try:
+            from main import metrics
+            if metrics and 'brand_lambda' in metrics:
+                metrics['brand_lambda'].labels(brand_id=str(brand_id)).observe(lambda_value)
+        except (ImportError, KeyError, Exception) as e:
+            logger.debug(f"Could not update lambda metrics: {e}")
+            pass
+            
     async def compute_optimal_lambda(self, brand_id: int, target_roas: float, db: Session) -> float:
         """
         Compute the optimal lambda factor for a brand based on target ROAS.
@@ -265,19 +274,55 @@ class PortfolioOptimizer:
                     
             # Check budget caps if we have strategy data
             if strategy:
-                # Check if over total budget cap
-                if strategy.spent_total + predicted_cost > strategy.total_cap:
-                    logger.warning(f"Brand {brand_id} exceeded total budget cap - skipping bid")
-                    return 0.0, 0.0  # No score, no throttle = skip bid
-                
-                # Check if over daily budget cap
-                if strategy.spent_today + predicted_cost > strategy.daily_cap:
-                    logger.warning(f"Brand {brand_id} exceeded daily budget cap - skipping bid")
-                    return 0.0, 0.0  # No score, no throttle = skip bid
-                
-                # Update daily spend (in-memory update only, will be saved to DB later)
-                strategy.spent_today += predicted_cost
-                strategy.spent_total += predicted_cost
+                try:
+                    # Begin a transaction with SERIALIZABLE isolation level to prevent race conditions
+                    # This ensures no other transaction can read/write these values until we commit
+                    if db is not None:
+                        db.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+                        
+                        # Get the latest strategy with fresh budget values using FOR UPDATE to lock the row
+                        fresh_strategy = db.query(BrandStrategy).with_for_update().filter(
+                            BrandStrategy.id == strategy.id
+                        ).first()
+                        
+                        if fresh_strategy:
+                            # Use the fresh values from the locked row
+                            strategy = fresh_strategy
+                    
+                    # Check if over total budget cap
+                    if strategy.spent_total + predicted_cost > strategy.total_cap:
+                        logger.warning(f"Brand {brand_id} exceeded total budget cap - skipping bid")
+                        return 0.0, 0.0  # No score, no throttle = skip bid
+                    
+                    # Check if over daily budget cap
+                    if strategy.spent_today + predicted_cost > strategy.daily_cap:
+                        logger.warning(f"Brand {brand_id} exceeded daily budget cap - skipping bid")
+                        return 0.0, 0.0  # No score, no throttle = skip bid
+                    
+                    # Update daily spend (will be committed at the end of this method)
+                    strategy.spent_today += predicted_cost
+                    strategy.spent_total += predicted_cost
+                    
+                    # Record this spend change for better traceability
+                    logger.debug(f"Budget update: brand_id={brand_id}, " +
+                                f"spent_today=${strategy.spent_today:.2f}, " +
+                                f"spent_total=${strategy.spent_total:.2f}, " +
+                                f"cost=${predicted_cost:.2f}")
+                                
+                except Exception as e:
+                    logger.error(f"Error in budget cap transaction: {e}")
+                    # In case of transaction error, use non-transactional approach as fallback
+                    if strategy.spent_total + predicted_cost > strategy.total_cap:
+                        logger.warning(f"Brand {brand_id} exceeded total budget cap (fallback check) - skipping bid")
+                        return 0.0, 0.0
+                    
+                    if strategy.spent_today + predicted_cost > strategy.daily_cap:
+                        logger.warning(f"Brand {brand_id} exceeded daily budget cap (fallback check) - skipping bid")
+                        return 0.0, 0.0
+                    
+                    # Update in memory only
+                    strategy.spent_today += predicted_cost
+                    strategy.spent_total += predicted_cost
             
             # Get brand ledger and lambda factor
             ledger = await self.get_brand_ledger(brand_id)
