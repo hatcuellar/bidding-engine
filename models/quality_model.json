@@ -1,0 +1,66 @@
+{
+  "booster": {
+    "base_score": 0.5,
+    "feature_names": [
+      "brand_priority",
+      "ad_slot_position",
+      "ad_slot_width",
+      "ad_slot_height",
+      "page_category_news",
+      "page_category_entertainment",
+      "page_category_sports",
+      "traffic_source_direct",
+      "traffic_source_search",
+      "traffic_source_social"
+    ],
+    "features": [
+      {
+        "depth": 3,
+        "name": "brand_priority",
+        "split_gain": 42.5692,
+        "split_index": 0,
+        "yes_index": 1,
+        "no_index": 2,
+        "missing_index": 1,
+        "split_feature": 0,
+        "split_condition": 1.5,
+        "default_left": true,
+        "leaf_value": 0.8,
+        "leaf_count": 25
+      },
+      {
+        "depth": 2,
+        "name": "ad_slot_position",
+        "split_gain": 31.4217,
+        "split_index": 3,
+        "yes_index": 5,
+        "no_index": 6,
+        "missing_index": 5,
+        "split_feature": 1,
+        "split_condition": 2.5,
+        "default_left": true,
+        "leaf_value": 1.2,
+        "leaf_count": 18
+      },
+      {
+        "depth": 1,
+        "name": "page_category_news",
+        "split_gain": 15.9832,
+        "split_index": 7,
+        "yes_index": 9,
+        "no_index": 10,
+        "missing_index": 9,
+        "split_feature": 4,
+        "split_condition": 0.5,
+        "default_left": true,
+        "leaf_value": 1.0,
+        "leaf_count": 30
+      }
+    ],
+    "objective": "reg:squarederror",
+    "tree_param": {
+      "num_feature": 10
+    }
+  },
+  "version": [3, 1, 0]
+}

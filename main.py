@@ -55,7 +55,9 @@ async def api_guide():
 # Include routers
 app.include_router(bid.router, prefix="/api/bid", tags=["bid"])
 app.include_router(health.router, tags=["health"])
-app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
+# Metrics router disabled until prometheus package is installed
+# from routes import metrics
+# app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
 
 @app.on_event("startup")
 async def startup_event():
