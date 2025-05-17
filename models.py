@@ -35,6 +35,7 @@ class BidHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     brand_id = Column(Integer, index=True, nullable=False)
     ad_slot_id = Column(Integer, index=True, nullable=False)
+    partner_id = Column(Integer, index=True, nullable=False, default=0)
     bid_amount = Column(Float, nullable=False)
     normalized_value = Column(Float, nullable=False)
     quality_factor = Column(Float, nullable=False, default=1.0)
@@ -43,10 +44,24 @@ class BidHistory(Base):
     bid_type = Column(String, nullable=False)  # CPA, CPC, CPM
     bid_timestamp = Column(DateTime, default=func.now(), index=True)
     
+    # Performance data
+    impressions = Column(Integer, nullable=False, default=0)
+    clicks = Column(Integer, nullable=False, default=0)
+    conversions = Column(Integer, nullable=False, default=0)
+    revenue = Column(Float, nullable=False, default=0.0)
+    cost = Column(Float, nullable=False, default=0.0)
+    
+    # Device and creative metadata
+    device_type = Column(Integer, nullable=True)  # 0=unknown, 1=desktop, 2=mobile, 3=tablet
+    creative_type = Column(Integer, nullable=True)  # 0=unknown, 1=image, 2=video, 3=native
+    placement_score = Column(Integer, nullable=True)  # 0-100 quality score
+    
     # Create composite indexes for common queries
     __table_args__ = (
         Index('idx_brand_slot_time', brand_id, ad_slot_id, bid_timestamp),
         Index('idx_bid_type_time', bid_type, bid_timestamp),
+        Index('idx_partner_time', partner_id, bid_timestamp),
+        Index('idx_brand_partner', brand_id, partner_id),
     )
 
 

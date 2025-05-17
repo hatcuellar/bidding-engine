@@ -84,3 +84,56 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     components: Dict[str, str]
+
+
+class ROASPredictionRequest(BaseModel):
+    """Request model for ROAS prediction"""
+    brand_id: int
+    partner_id: int
+    ad_slot_id: int
+    device_type: Optional[int] = 0
+    creative_type: Optional[int] = 0
+    placement_score: Optional[int] = 50
+
+
+class ROASPredictionResponse(BaseModel):
+    """Response model for ROAS prediction"""
+    brand_id: int
+    partner_id: int
+    ad_slot_id: int
+    predicted_vpi: float
+    estimated_roas: float
+    actual_roas: float
+    historical_impressions: int
+    historical_revenue: float
+    historical_cost: float
+    timestamp: str
+
+
+class PerformanceEventRequest(BaseModel):
+    """Request model for performance event ingestion"""
+    type: str = Field(..., description="Type of event: impression, click, or conversion")
+    brand_id: int
+    partner_id: int
+    ad_slot_id: int
+    timestamp: datetime
+    metadata: Optional[Dict[str, Any]] = None
+    revenue: Optional[float] = None
+
+
+class BudgetLedgerEntry(BaseModel):
+    """Budget tracking model for portfolio optimization"""
+    brand_id: int
+    total_budget: float
+    spent_budget: float
+    target_roas: float
+    current_roas: float
+    throttle_factor: float
+
+
+class PortfolioOptimizationConfig(BaseModel):
+    """Configuration for portfolio-wide ROAS optimization"""
+    enabled: bool = True
+    min_target_roas: float = 2.0
+    default_lambda: float = 0.5
+    update_frequency_minutes: int = 60
