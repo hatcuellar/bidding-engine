@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Request, status
 from sqlalchemy.orm import Session
-from typing import Dict, Any
 import time
+import json
 import logging
 from opentelemetry import trace
 from opentelemetry.trace import get_tracer
@@ -9,21 +9,22 @@ from opentelemetry.trace import get_tracer
 from database import get_db
 from bidding_engine import bidding_engine
 import models
+from schemas import BidRequest, BidResponse, BidHistoryResponse, BrandStrategyRequest, BrandStrategyResult
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
-@router.post("/calculate")
+@router.post("/calculate", response_model=BidResponse, status_code=status.HTTP_200_OK)
 async def calculate_bid(
     request: Request,
-    bid_request: Dict[str, Any] = Body(...),
+    bid_request: BidRequest,
     db: Session = Depends(get_db)
 ):
     """
     Calculate bid value based on provided parameters.
     
-    Body parameters:
+    Request body contains:
     - brand_id: ID of the brand/advertiser
     - bid_amount: Original bid amount
     - bid_type: Type of bid (CPA, CPC, CPM)
@@ -33,16 +34,11 @@ async def calculate_bid(
     
     with tracer.start_as_current_span("calculate_bid"):
         try:
-            # Input validation
-            if "brand_id" not in bid_request:
-                raise HTTPException(status_code=400, detail="brand_id is required")
-            if "bid_amount" not in bid_request:
-                raise HTTPException(status_code=400, detail="bid_amount is required")
-            if "bid_type" not in bid_request:
-                raise HTTPException(status_code=400, detail="bid_type is required")
-                
+            # Convert Pydantic model to dict for bidding engine
+            bid_request_dict = bid_request.dict()
+            
             # Get brand strategy from database
-            brand_id = bid_request.get("brand_id")
+            brand_id = bid_request.brand_id
             brand_strategy = db.query(models.BrandStrategy).filter(
                 models.BrandStrategy.brand_id == brand_id,
                 models.BrandStrategy.is_active == True
@@ -53,7 +49,6 @@ async def calculate_bid(
                 try:
                     strategy_config = {}
                     if brand_strategy.strategy_config:
-                        import json
                         strategy_config = json.loads(brand_strategy.strategy_config)
                     
                     strategy_config.update({
@@ -61,24 +56,24 @@ async def calculate_bid(
                         "priority": brand_strategy.priority
                     })
                     
-                    bid_request["strategy"] = strategy_config
+                    bid_request_dict["strategy"] = strategy_config
                 except Exception as e:
                     logger.error(f"Error parsing strategy config: {e}")
             
             # Process the bid
-            result = await bidding_engine.process_bid(bid_request)
+            result = await bidding_engine.process_bid(bid_request_dict)
             
             # Record bid in history
             try:
                 bid_history = models.BidHistory(
                     brand_id=brand_id,
-                    ad_slot_id=bid_request.get("ad_slot", {}).get("id", 0),
-                    bid_amount=bid_request.get("bid_amount", 0),
+                    ad_slot_id=bid_request.ad_slot.id,
+                    bid_amount=bid_request.bid_amount,
                     normalized_value=result.get("normalized_value", 0),
                     quality_factor=result.get("quality_factor", 1.0),
                     ctr=result.get("ctr", 0),
                     cvr=result.get("cvr", 0),
-                    bid_type=bid_request.get("bid_type", "CPM")
+                    bid_type=bid_request.bid_type
                 )
                 db.add(bid_history)
                 db.commit()
@@ -96,10 +91,13 @@ async def calculate_bid(
             raise
         except Exception as e:
             logger.error(f"Error processing bid: {e}")
-            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {str(e)}"
+            )
 
 
-@router.get("/history/{brand_id}")
+@router.get("/history/{brand_id}", response_model=BidHistoryResponse)
 async def get_bid_history(
     brand_id: int,
     limit: int = 10,
@@ -141,18 +139,21 @@ async def get_bid_history(
             }
         except Exception as e:
             logger.error(f"Error retrieving bid history: {e}")
-            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {str(e)}"
+            )
 
 
-@router.post("/strategy")
+@router.post("/strategy", status_code=status.HTTP_201_CREATED)
 async def update_brand_strategy(
-    strategy: dict = Body(...),
+    strategy: BrandStrategyRequest,
     db: Session = Depends(get_db)
 ):
     """
     Create or update brand bidding strategy.
     
-    Body parameters:
+    Request body contains:
     - brand_id: ID of the brand/advertiser
     - vpi_multiplier: Value-per-impression multiplier
     - priority: Priority level for the brand
@@ -160,31 +161,34 @@ async def update_brand_strategy(
     """
     with tracer.start_as_current_span("update_brand_strategy"):
         try:
-            brand_id = strategy.get("brand_id")
-            if not brand_id:
-                raise HTTPException(status_code=400, detail="brand_id is required")
-                
+            brand_id = strategy.brand_id
+            
             # Check if strategy exists
             existing = db.query(models.BrandStrategy).filter(
                 models.BrandStrategy.brand_id == brand_id,
                 models.BrandStrategy.is_active == True
             ).first()
             
+            # Convert strategy_config to JSON string if provided
+            strategy_config_str = None
+            if strategy.strategy_config:
+                strategy_config_str = json.dumps(strategy.strategy_config)
+            
             if existing:
                 # Update existing strategy
-                existing.vpi_multiplier = strategy.get("vpi_multiplier", existing.vpi_multiplier)
-                existing.priority = strategy.get("priority", existing.priority)
-                if "strategy_config" in strategy:
-                    existing.strategy_config = strategy.get("strategy_config")
+                existing.vpi_multiplier = strategy.vpi_multiplier
+                existing.priority = strategy.priority
+                if strategy.strategy_config is not None:
+                    existing.strategy_config = strategy_config_str
                 db.commit()
                 return {"message": "Strategy updated successfully", "id": existing.id}
             else:
                 # Create new strategy
                 new_strategy = models.BrandStrategy(
                     brand_id=brand_id,
-                    vpi_multiplier=strategy.get("vpi_multiplier", 1.0),
-                    priority=strategy.get("priority", 1),
-                    strategy_config=strategy.get("strategy_config")
+                    vpi_multiplier=strategy.vpi_multiplier,
+                    priority=strategy.priority,
+                    strategy_config=strategy_config_str
                 )
                 db.add(new_strategy)
                 db.commit()
@@ -196,10 +200,13 @@ async def update_brand_strategy(
         except Exception as e:
             logger.error(f"Error updating brand strategy: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {str(e)}"
+            )
 
 
-@router.get("/strategy/{brand_id}")
+@router.get("/strategy/{brand_id}", response_model=BrandStrategyResult)
 async def get_brand_strategy(
     brand_id: int,
     db: Session = Depends(get_db)
@@ -232,7 +239,6 @@ async def get_brand_strategy(
             # Parse strategy_config if available
             if strategy.strategy_config:
                 try:
-                    import json
                     result["strategy_config"] = json.loads(strategy.strategy_config)
                 except:
                     result["strategy_config"] = strategy.strategy_config
@@ -241,4 +247,7 @@ async def get_brand_strategy(
             
         except Exception as e:
             logger.error(f"Error retrieving brand strategy: {e}")
-            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {str(e)}"
+            )

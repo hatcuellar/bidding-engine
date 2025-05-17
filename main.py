@@ -34,9 +34,12 @@ if otlp_endpoint:
 
 # Create FastAPI app
 app = FastAPI(
-    title="Ad Bidding Engine API",
-    description="A multi-model ad-bidding engine with FastAPI",
+    title="Multi-Model Ad Bidding Engine API",
+    description="A high-performance multi-model ad-bidding engine with FastAPI",
     version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
 # Configure CORS
@@ -57,15 +60,40 @@ app.include_router(health.router, tags=["health"])
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on startup."""
+    """Initialize database and connections on startup."""
     try:
-        # Create tables if they don't exist
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+        # Create tables if they don't exist (in development)
+        # In production, Alembic should handle migrations
+        if os.getenv("ENV") == "development":
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created successfully for development")
+        
+        # Initialize Redis connection pool if available
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            from utils.redis_cache import initialize_redis_pool
+            await initialize_redis_pool()
+            logger.info("Redis connection pool initialized")
+        
     except Exception as e:
-        logger.error(f"Failed to create database tables: {e}")
+        logger.error(f"Failed to initialize application: {e}")
         raise
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup connections on shutdown."""
+    try:
+        # Close Redis connection pool if available
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            from utils.redis_cache import close_redis_pool
+            await close_redis_pool()
+            logger.info("Redis connection pool closed")
+            
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
