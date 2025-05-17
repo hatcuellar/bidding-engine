@@ -251,6 +251,34 @@ class PortfolioOptimizer:
             return predicted_revenue, 1.0
         
         try:
+            # Get brand strategy from database to check budget caps
+            strategy = None
+            if db is not None:
+                try:
+                    from models import BrandStrategy
+                    strategy = db.query(BrandStrategy).filter(
+                        BrandStrategy.brand_id == brand_id,
+                        BrandStrategy.is_active == True
+                    ).first()
+                except Exception as e:
+                    logger.error(f"Error fetching brand strategy from DB: {e}")
+                    
+            # Check budget caps if we have strategy data
+            if strategy:
+                # Check if over total budget cap
+                if strategy.spent_total + predicted_cost > strategy.total_cap:
+                    logger.warning(f"Brand {brand_id} exceeded total budget cap - skipping bid")
+                    return 0.0, 0.0  # No score, no throttle = skip bid
+                
+                # Check if over daily budget cap
+                if strategy.spent_today + predicted_cost > strategy.daily_cap:
+                    logger.warning(f"Brand {brand_id} exceeded daily budget cap - skipping bid")
+                    return 0.0, 0.0  # No score, no throttle = skip bid
+                
+                # Update daily spend (in-memory update only, will be saved to DB later)
+                strategy.spent_today += predicted_cost
+                strategy.spent_total += predicted_cost
+            
             # Get brand ledger and lambda factor
             ledger = await self.get_brand_ledger(brand_id)
             lambda_factor = await self.get_lambda_factor(brand_id)
@@ -262,7 +290,7 @@ class PortfolioOptimizer:
             # Apply throttle factor based on budget and ROAS constraints
             throttle_factor = ledger["throttle_factor"]
             
-            # Check if over budget
+            # Check if over budget in Redis/memory ledger (fallback)
             spent = ledger["spent_budget"]
             total = ledger["total_budget"]
             if spent >= total:
@@ -275,6 +303,11 @@ class PortfolioOptimizer:
             # Check if ROAS is below target
             current_roas = ledger["current_roas"]
             target_roas = ledger["target_roas"]
+            
+            # If we have the strategy with DB target_roas, use that instead
+            if strategy and strategy.target_roas:
+                target_roas = strategy.target_roas
+            
             if current_roas < target_roas * 0.8:
                 # Significantly below target, reduce throttle
                 throttle_factor = min(throttle_factor, 0.3)
@@ -291,6 +324,17 @@ class PortfolioOptimizer:
             await self.update_brand_ledger(brand_id, {
                 "spent_budget": spent + predicted_cost
             })
+            
+            # Commit database updates for budget tracking if needed
+            if db is not None and strategy is not None:
+                try:
+                    # Only update in the DB if the change is significant enough (>= $0.01)
+                    # to avoid too many small updates
+                    if predicted_cost >= 0.01:
+                        db.commit()
+                except Exception as e:
+                    logger.error(f"Error updating budget in database: {e}")
+                    db.rollback()
             
             return score, throttle_factor
             
@@ -394,24 +438,72 @@ class PortfolioOptimizer:
             db: Database session
         """
         try:
-            # Get all brands with strategies
-            brands = db.query(BrandStrategy.brand_id).distinct().all()
+            # Query database for all active brands
+            brands = db.query(BrandStrategy).filter(BrandStrategy.is_active == True).all()
             
-            for brand_record in brands:
-                brand_id = brand_record[0]
+            now = datetime.utcnow()
+            today = now.strftime("%Y-%m-%d")
+            
+            logger.info(f"Resetting daily budgets for {len(brands)} brands on {today}")
+            
+            for brand in brands:
+                try:
+                    # Track previous day's spending in logs for reporting
+                    logger.info(f"Brand {brand.brand_id} spent ${brand.spent_today:.2f} yesterday " 
+                               f"(total spent: ${brand.spent_total:.2f}, target: ${brand.total_cap:.2f})")
+                    
+                    # Reset daily spending
+                    brand.spent_today = 0.0
+                    
+                    # Get yesterday's actual spending for reconciliation
+                    yesterday_start = datetime.combine(now.date() - timedelta(days=1), time.min)
+                    yesterday_end = datetime.combine(now.date(), time.min)
+                    
+                    query = text("""
+                    SELECT SUM(cost) as actual_cost
+                    FROM bid_history
+                    WHERE brand_id = :brand_id
+                      AND bid_timestamp >= :start_time
+                      AND bid_timestamp < :end_time
+                    """)
+                    
+                    result = db.execute(query, {
+                        "brand_id": brand.brand_id,
+                        "start_time": yesterday_start,
+                        "end_time": yesterday_end
+                    })
+                    
+                    row = result.fetchone()
+                    
+                    # Reconcile total spending with actual costs if available
+                    if row and row.actual_cost is not None:
+                        # Ensure accurate total spend tracking
+                        actual_daily_spend = float(row.actual_cost)
+                        logger.info(f"Brand {brand.brand_id} actual spend reconciliation: ${actual_daily_spend:.2f}")
+                        
+                        # Adjust the total spent to match actual spend if significantly different
+                        if abs(brand.spent_total - actual_daily_spend) > 1.0:  # If more than $1 different
+                            logger.warning(f"Budget reconciliation: Brand {brand.brand_id} "
+                                          f"spent_total adjusted by ${actual_daily_spend - brand.spent_total:.2f}")
+                            brand.spent_total = actual_daily_spend
+                    
+                    # Also reset spent budget in Redis/memory ledger
+                    ledger = await self.get_brand_ledger(brand.brand_id)
+                    await self.update_brand_ledger(brand.brand_id, {
+                        "spent_budget": 0.0
+                    })
                 
-                # Get current ledger
-                ledger = await self.get_brand_ledger(brand_id)
-                
-                # Reset spent budget
-                await self.update_brand_ledger(brand_id, {
-                    "spent_budget": 0.0
-                })
-                
-                logger.info(f"Reset daily budget for brand {brand_id}")
-        
+                except Exception as e:
+                    logger.error(f"Error resetting budget for brand {brand.brand_id}: {e}")
+                    # Continue with other brands even if one fails
+            
+            # Commit all changes
+            db.commit()
+            logger.info(f"Successfully reset daily budgets for all brands")
+            
         except Exception as e:
-            logger.error(f"Error resetting daily budgets: {e}")
+            logger.error(f"Error in daily budget reset: {e}")
+            db.rollback()
 
 # Singleton instance
 _optimizer = None

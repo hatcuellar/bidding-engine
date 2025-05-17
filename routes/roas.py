@@ -10,7 +10,7 @@ import logging
 import json
 
 from database import get_db
-from models import BidHistory
+from models import BidHistory, EventLog
 from schemas import ROASPredictionRequest, ROASPredictionResponse, PerformanceEventRequest
 from utils.roas_predictor import get_roas_predictor
 
