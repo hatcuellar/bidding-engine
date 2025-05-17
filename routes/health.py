@@ -3,10 +3,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 import os
+import logging
 
 from database import get_db
 from schemas import HealthResponse
-from utils.redis_cache import redis_pool
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,18 +33,19 @@ async def health_check(db: Session = Depends(get_db)):
     # Check Redis connection if configured
     if os.getenv("REDIS_URL"):
         try:
-            if redis_pool:
-                # Simple check using SET/GET operations
-                test_key = "health:check"
-                await redis_pool.set(test_key, "ok", ex=60)  # 1 minute TTL
-                result = await redis_pool.get(test_key)
-                if result == "ok":
-                    components["redis"] = "ok"
-                else:
-                    components["redis"] = "error"
+            # Import here to avoid circular imports
+            from utils.redis_cache import get_cached_feature, set_cached_feature
+            
+            # Simple check using SET/GET operations
+            test_key = "health:check"
+            await set_cached_feature(test_key, "ok", ttl=60)  # 1 minute TTL
+            result = await get_cached_feature(test_key)
+            if result == "ok":
+                components["redis"] = "ok"
             else:
-                components["redis"] = "not_initialized"
-        except Exception:
+                components["redis"] = "error"
+        except Exception as e:
+            logger.error(f"Redis health check failed: {e}")
             components["redis"] = "error"
     
     # Determine overall status

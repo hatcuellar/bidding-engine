@@ -12,7 +12,7 @@ from typing import Optional, Any, Dict
 
 # Import redis with proper error handling
 try:
-    import redis.asyncio as redis
+    import redis.asyncio as redis_async
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -40,7 +40,7 @@ async def initialize_redis_pool() -> bool:
     
     try:
         # Create connection pool
-        redis_pool = redis.from_url(
+        redis_pool = redis_async.from_url(
             redis_url,
             encoding="utf-8",
             decode_responses=True
