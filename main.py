@@ -1,7 +1,9 @@
 import os
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from database import engine, Base
 from routes import bid, health
@@ -15,7 +17,7 @@ app = FastAPI(
     title="Multi-Model Ad Bidding Engine API",
     description="A high-performance multi-model ad-bidding engine with FastAPI",
     version="1.0.0",
-    docs_url="/",  # Serve Swagger UI at the root path
+    docs_url="/docs",  # Swagger UI at /docs path
     redoc_url="/redoc",
     openapi_url="/openapi.json"
 )
@@ -31,6 +33,14 @@ app.add_middleware(
 
 # OpenTelemetry instrumentation is disabled for now
 # FastAPIInstrumentor.instrument_app(app)
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Root route redirects to Swagger UI
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return RedirectResponse(url="/docs")
 
 # Include routers
 app.include_router(bid.router, prefix="/api/bid", tags=["bid"])
