@@ -102,6 +102,23 @@ curl -X POST "http://localhost:8000/api/bid/strategy" \
 - Performance metrics: `/api/metrics/performance`
 - Prometheus metrics: `/metrics`
 
+### Prometheus Metrics Reference
+
+| Metric Name | Type | Labels | Description |
+|-------------|------|--------|-------------|
+| `bids_by_type_total` | Counter | `bid_type` | Total number of bids processed by type (CPA, CPC, CPM) |
+| `bid_values` | Histogram | `bid_type` | Distribution of bid values in $ units |
+| `brand_lambda_values` | Histogram | `brand_id` | Distribution of λ values by brand (used in bid scoring) |
+| `lambda_statistics` | Gauge | `stat_type` | Global λ statistics: mean, median, stddev, count |
+| `roas_performance` | Histogram | `brand_id` | Distribution of ROAS values by brand |
+| `http_requests_total` | Counter | `status`, `method`, `endpoint` | HTTP request count by status code, method, and endpoint |
+| `http_request_duration_seconds` | Histogram | `status`, `method`, `endpoint` | HTTP request duration by status code, method, and endpoint |
+| `requests_in_progress` | Gauge | `method`, `endpoint` | Current number of HTTP requests in progress |
+
+For alerting, consider setting thresholds on the following metrics:
+- `lambda_statistics{stat_type="stddev"}` > 1.0 (detecting high variance in λ values)
+- `roas_performance{brand_id="X"}` < target (detecting underperforming brands)
+
 ## Docker Deployment
 
 ```bash

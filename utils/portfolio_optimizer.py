@@ -469,6 +469,72 @@ class PortfolioOptimizer:
                 logger.info(f"Updated metrics for brand {brand_id}: "
                             f"ROAS={current_roas:.2f}/{target_roas:.2f}, "
                             f"throttle={throttle_factor:.2f}, lambda={optimal_lambda:.2f}")
+            
+            # Perform lambda drift analysis
+            try:
+                # Collect all lambda values from memory
+                all_lambdas = []
+                lambda_by_brand = {}
+                
+                with _lambda_lock:
+                    for bid, lval in _lambda_factors.items():
+                        all_lambdas.append(lval)
+                        lambda_by_brand[bid] = lval
+                
+                # Only analyze if we have sufficient data points
+                if len(all_lambdas) >= 3:
+                    import numpy as np
+                    
+                    # Calculate lambda statistics
+                    lambda_mean = np.mean(all_lambdas)
+                    lambda_median = np.median(all_lambdas)
+                    lambda_stddev = np.std(all_lambdas) if len(all_lambdas) > 1 else 0.1
+                    
+                    # Update Prometheus metrics
+                    try:
+                        from main import metrics
+                        if metrics and 'lambda_stats' in metrics:
+                            metrics['lambda_stats'].labels(stat_type="mean").set(lambda_mean)
+                            metrics['lambda_stats'].labels(stat_type="median").set(lambda_median)
+                            metrics['lambda_stats'].labels(stat_type="stddev").set(lambda_stddev)
+                            metrics['lambda_stats'].labels(stat_type="count").set(len(all_lambdas))
+                    except Exception as e:
+                        logger.debug(f"Couldn't update lambda statistics in Prometheus: {e}")
+                    
+                    # Find outliers using z-score method
+                    outlier_threshold = 3.0  # 3 standard deviations
+                    outliers = []
+                    
+                    for bid, lval in lambda_by_brand.items():
+                        if lambda_stddev > 0:
+                            z_score = abs(lval - lambda_mean) / lambda_stddev
+                            if z_score > outlier_threshold:
+                                outliers.append((bid, lval, z_score))
+                    
+                    # Log summary statistics
+                    logger.info(f"Lambda statistics: mean={lambda_mean:.3f}, median={lambda_median:.3f}, "
+                              f"stddev={lambda_stddev:.3f}, count={len(all_lambdas)}")
+                    
+                    # Handle outliers
+                    if outliers:
+                        outliers.sort(key=lambda x: x[2], reverse=True)
+                        logger.warning(f"Lambda outliers detected! {len(outliers)} brands have significantly unusual values")
+                        
+                        for bid, lval, z_score in outliers:
+                            logger.warning(f"Brand {bid}: lambda={lval:.3f} (z-score={z_score:.1f})")
+                            
+                            # For extreme outliers (>10x median), cap the lambda value
+                            if lambda_median > 0 and lval > 10 * lambda_median:
+                                capped_lambda = max(0.1, min(10.0, 3 * lambda_median))
+                                logger.warning(f"Extreme lambda detected for brand {bid}! "
+                                              f"Capping value from {lval:.3f} to {capped_lambda:.3f}")
+                                
+                                # Update with safer capped value
+                                await self.update_lambda_factor(bid, capped_lambda)
+            except ImportError:
+                logger.warning("NumPy not available for lambda drift monitoring")
+            except Exception as e:
+                logger.error(f"Error in lambda drift monitoring: {e}")
         
         except Exception as e:
             logger.error(f"Error updating performance metrics: {e}")
