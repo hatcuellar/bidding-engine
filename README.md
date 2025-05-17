@@ -231,6 +231,31 @@ The bidding engine relies on several automated scheduled workflows to maintain o
 
 These workflows can be configured in your deployment environment's job scheduler (e.g., cron jobs or Kubernetes CronJobs).
 
+## Security and Maintenance
+
+### Secrets Rotation
+
+For production deployments, regularly rotate the following secrets:
+
+1. **JWT Secret Key**: Rotate every 90 days
+   - Update the `JWT_SECRET` environment variable
+   - Issue new tokens to clients (brands and partners)
+   - Allow a 24-hour grace period with dual validity of old and new secrets
+   - Monitor for failed authentications after rotation
+
+2. **Database Credentials**: Rotate every 180 days
+   - Create new database user with identical permissions
+   - Update the `DATABASE_URL` environment variable during a maintenance window
+   - Verify connections with new credentials before removing old user
+   - Monitor database connection metrics after rotation
+
+3. **Redis Credentials**: Rotate with database credentials
+   - Update auth tokens in Redis configuration
+   - Update the `REDIS_URL` environment variables
+   - Perform during the same maintenance window as database rotation
+
+Each service should maintain a record of the last rotation date and send alerts when rotation is due.
+
 ## Contributing
 
 1. Create a feature branch
