@@ -41,10 +41,17 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return RedirectResponse(url="/docs")
+    
+# API Guide route
+@app.get("/guide", response_class=HTMLResponse)
+async def api_guide():
+    with open("static/api-guide.html", "r") as f:
+        return f.read()
 
 # Include routers
 app.include_router(bid.router, prefix="/api/bid", tags=["bid"])
 app.include_router(health.router, tags=["health"])
+app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
 
 @app.on_event("startup")
 async def startup_event():

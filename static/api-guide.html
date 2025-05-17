@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Model Ad Bidding Engine API Guide</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        pre {
+            background-color: #1e1e1e;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        .endpoint {
+            border-left: 4px solid var(--bs-primary);
+            padding-left: 15px;
+            margin-bottom: 30px;
+        }
+        .method {
+            display: inline-block;
+            padding: 5px 10px;
+            font-weight: bold;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .method-post {
+            background-color: #1abc9c;
+            color: white;
+        }
+        .method-get {
+            background-color: #3498db;
+            color: white;
+        }
+        .url-path {
+            font-family: monospace;
+            background-color: #2c2c2c;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .badge {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <div class="container my-5">
+        <h1 class="display-4">Multi-Model Ad Bidding Engine API Guide</h1>
+        <p class="lead">A comprehensive guide to using the Multi-Model Ad Bidding Engine API.</p>
+        
+        <div class="alert alert-info">
+            <strong>Base URL:</strong> <code>/api</code>
+        </div>
+        
+        <hr class="my-5">
+        
+        <h2 class="mb-4">Introduction</h2>
+        <p>The Multi-Model Ad Bidding Engine API provides a powerful system for normalizing and evaluating bids across different bid models (CPA, CPC, CPM). This API allows you to calculate bid values, retrieve historical bid data, and manage bidding strategies.</p>
+        
+        <h3 class="mt-5">Key Features</h3>
+        <ul>
+            <li>Multi-model bid normalization (CPA, CPC, CPM)</li>
+            <li>Beta-posterior smoothing for CTR/CVR predictions</li>
+            <li>ML-powered quality factors with XGBoost</li>
+            <li>Brand-specific bidding strategies</li>
+            <li>Performance monitoring and benchmarking</li>
+            <li>Redis caching for better performance</li>
+        </ul>
+        
+        <hr class="my-5">
+        
+        <h2 class="mb-4">Bidding Endpoints</h2>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-post">POST</span>
+                <span class="url-path">/api/bid/calculate</span>
+            </h3>
+            <p>Calculate a bid value based on provided parameters, normalizing across different bid models.</p>
+            
+            <h4 class="mt-4">Request Body</h4>
+            <pre><code>{
+  "brand_id": 123,
+  "bid_amount": 2.50,
+  "bid_type": "CPC",
+  "ad_slot": {
+    "id": 456,
+    "width": 300,
+    "height": 250,
+    "position": 1,
+    "page": {
+      "category": "news",
+      "traffic_source": "direct"
+    }
+  },
+  "strategy": {
+    "vpi_multiplier": 1.2,
+    "priority": 2
+  }
+}</code></pre>
+            
+            <h4 class="mt-4">Response</h4>
+            <pre><code>{
+  "original_bid": 2.5,
+  "normalized_value": 0.075,
+  "final_bid_value": 0.09375,
+  "bid_type": "CPC",
+  "ctr": 0.03,
+  "cvr": 0.05,
+  "brand_id": 123,
+  "ad_slot_id": 456,
+  "quality_factor": 1.25,
+  "process_time_ms": 15.64
+}</code></pre>
+            
+            <h4 class="mt-4">Field Descriptions</h4>
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>original_bid</code></td>
+                        <td>The original bid amount provided in the request</td>
+                    </tr>
+                    <tr>
+                        <td><code>normalized_value</code></td>
+                        <td>The bid value normalized to a value-per-impression (VPI) basis</td>
+                    </tr>
+                    <tr>
+                        <td><code>final_bid_value</code></td>
+                        <td>The final bid value after applying quality factors</td>
+                    </tr>
+                    <tr>
+                        <td><code>bid_type</code></td>
+                        <td>The type of bid (CPA, CPC, CPM)</td>
+                    </tr>
+                    <tr>
+                        <td><code>ctr</code></td>
+                        <td>Click-through rate used for normalization (with beta-posterior smoothing)</td>
+                    </tr>
+                    <tr>
+                        <td><code>cvr</code></td>
+                        <td>Conversion rate used for normalization (with beta-posterior smoothing)</td>
+                    </tr>
+                    <tr>
+                        <td><code>quality_factor</code></td>
+                        <td>The quality factor applied to the normalized value</td>
+                    </tr>
+                    <tr>
+                        <td><code>process_time_ms</code></td>
+                        <td>The time taken to process the bid in milliseconds</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-get">GET</span>
+                <span class="url-path">/api/bid/history/{brand_id}</span>
+            </h3>
+            <p>Get bid history for a specific brand.</p>
+            
+            <h4 class="mt-4">Path Parameters</h4>
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>brand_id</code></td>
+                        <td>ID of the brand/advertiser</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 class="mt-4">Query Parameters</h4>
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>limit</code></td>
+                        <td>Number of records to return</td>
+                        <td>10</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 class="mt-4">Example Request</h4>
+            <pre><code>GET /api/bid/history/123?limit=5</code></pre>
+            
+            <h4 class="mt-4">Example Response</h4>
+            <pre><code>{
+  "brand_id": 123,
+  "history": [
+    {
+      "id": 789,
+      "ad_slot_id": 456,
+      "bid_amount": 2.5,
+      "normalized_value": 0.075,
+      "quality_factor": 1.25,
+      "ctr": 0.03,
+      "cvr": 0.05,
+      "bid_type": "CPC",
+      "timestamp": "2025-05-17T14:52:36.123456"
+    },
+    {
+      "id": 788,
+      "ad_slot_id": 457,
+      "bid_amount": 1.8,
+      "normalized_value": 0.054,
+      "quality_factor": 1.15,
+      "ctr": 0.03,
+      "cvr": 0.05,
+      "bid_type": "CPC",
+      "timestamp": "2025-05-17T14:48:12.654321"
+    }
+  ]
+}</code></pre>
+        </div>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-post">POST</span>
+                <span class="url-path">/api/bid/strategy</span>
+            </h3>
+            <p>Create or update brand bidding strategy.</p>
+            
+            <h4 class="mt-4">Request Body</h4>
+            <pre><code>{
+  "brand_id": 123,
+  "vpi_multiplier": 1.2,
+  "priority": 2,
+  "strategy_config": {
+    "max_bid": 5.0,
+    "min_bid": 0.5,
+    "weekend_boost": 1.1,
+    "custom_rules": {
+      "category_boosts": {
+        "news": 1.15,
+        "finance": 1.2,
+        "entertainment": 0.9
+      }
+    }
+  }
+}</code></pre>
+            
+            <h4 class="mt-4">Response</h4>
+            <pre><code>{
+  "message": "Strategy updated successfully",
+  "id": 42
+}</code></pre>
+        </div>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-get">GET</span>
+                <span class="url-path">/api/bid/strategy/{brand_id}</span>
+            </h3>
+            <p>Get strategy configuration for a brand.</p>
+            
+            <h4 class="mt-4">Path Parameters</h4>
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>brand_id</code></td>
+                        <td>ID of the brand/advertiser</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 class="mt-4">Example Response</h4>
+            <pre><code>{
+  "strategy": {
+    "id": 42,
+    "brand_id": 123,
+    "vpi_multiplier": 1.2,
+    "priority": 2,
+    "created_at": "2025-05-10T09:30:00.000000",
+    "updated_at": "2025-05-17T14:52:36.123456",
+    "strategy_config": {
+      "max_bid": 5.0,
+      "min_bid": 0.5,
+      "weekend_boost": 1.1,
+      "custom_rules": {
+        "category_boosts": {
+          "news": 1.15,
+          "finance": 1.2,
+          "entertainment": 0.9
+        }
+      }
+    }
+  }
+}</code></pre>
+        </div>
+        
+        <hr class="my-5">
+        
+        <h2 class="mb-4">Health and Metrics Endpoints</h2>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-get">GET</span>
+                <span class="url-path">/api/health/healthz</span>
+            </h3>
+            <p>Health check endpoint to verify API and database are operational.</p>
+            
+            <h4 class="mt-4">Example Response</h4>
+            <pre><code>{
+  "status": "healthy",
+  "timestamp": "2025-05-17T15:00:00.000000",
+  "components": {
+    "api": "ok",
+    "database": "ok",
+    "redis": "ok"
+  }
+}</code></pre>
+        </div>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-get">GET</span>
+                <span class="url-path">/api/metrics/performance</span>
+            </h3>
+            <p>Get performance metrics for the bidding engine.</p>
+            
+            <h4 class="mt-4">Example Response</h4>
+            <pre><code>{
+  "metrics": {
+    "total_bid_processing": {
+      "operation": "total_bid_processing",
+      "count": 152,
+      "min_ms": 10.23,
+      "max_ms": 78.45,
+      "avg_ms": 25.67,
+      "median_ms": 22.19,
+      "p95_ms": 45.32,
+      "p99_ms": 68.91,
+      "last_updated": "2025-05-17T15:05:00.000000"
+    },
+    "quality_factors": {
+      "operation": "quality_factors",
+      "count": 152,
+      "min_ms": 5.11,
+      "max_ms": 35.78,
+      "avg_ms": 12.34,
+      "median_ms": 10.92,
+      "p95_ms": 22.45,
+      "p99_ms": 30.12,
+      "last_updated": "2025-05-17T15:05:00.000000"
+    },
+    "historical_performance": {
+      "operation": "historical_performance",
+      "count": 152,
+      "min_ms": 3.21,
+      "max_ms": 28.94,
+      "avg_ms": 8.76,
+      "median_ms": 7.53,
+      "p95_ms": 18.32,
+      "p99_ms": 25.67,
+      "last_updated": "2025-05-17T15:05:00.000000"
+    }
+  },
+  "timestamp": "2025-05-17T15:05:00.000000"
+}</code></pre>
+        </div>
+        
+        <div class="endpoint">
+            <h3>
+                <span class="method method-get">GET</span>
+                <span class="url-path">/api/metrics/performance/{operation}</span>
+            </h3>
+            <p>Get performance metrics for a specific operation.</p>
+            
+            <h4 class="mt-4">Path Parameters</h4>
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>operation</code></td>
+                        <td>Name of the operation (e.g., total_bid_processing, quality_factors)</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 class="mt-4">Example Response</h4>
+            <pre><code>{
+  "operation": "total_bid_processing",
+  "metrics": {
+    "operation": "total_bid_processing",
+    "count": 152,
+    "min_ms": 10.23,
+    "max_ms": 78.45,
+    "avg_ms": 25.67,
+    "median_ms": 22.19,
+    "p95_ms": 45.32,
+    "p99_ms": 68.91,
+    "last_updated": "2025-05-17T15:05:00.000000"
+  },
+  "timestamp": "2025-05-17T15:05:00.000000"
+}</code></pre>
+        </div>
+        
+        <hr class="my-5">
+        
+        <h2 class="mb-4">Advanced Concepts</h2>
+        
+        <h3 class="mt-4">Bid Normalization</h3>
+        <p>The bidding engine normalizes different bid types to a common value-per-impression (VPI) metric:</p>
+        <ul>
+            <li><strong>CPM (Cost Per Mille):</strong> CPM / 1000 = VPI</li>
+            <li><strong>CPC (Cost Per Click):</strong> CPC × CTR = VPI</li>
+            <li><strong>CPA (Cost Per Acquisition):</strong> CPA × CTR × CVR = VPI</li>
+        </ul>
+        <p>This normalization allows for fair comparison between different bidding models.</p>
+        
+        <h3 class="mt-4">Beta-Posterior Smoothing</h3>
+        <p>The bidding engine uses Bayesian beta-posterior smoothing for CTR and CVR predictions. This statistical technique helps avoid overconfidence in rates estimated from small sample sizes.</p>
+        <p>Given α (alpha) and β (beta) as prior parameters, and observed successes (clicks) and trials (impressions):</p>
+        <pre><code>Posterior Mean = (α + successes) / (α + β + trials)</code></pre>
+        <p>This approach balances observed data with prior beliefs, providing more stable estimates especially with limited data.</p>
+        
+        <h3 class="mt-4">Quality Factors</h3>
+        <p>Quality factors adjust normalized bid values based on various characteristics:</p>
+        <ul>
+            <li><strong>Ad Size:</strong> Larger ad sizes generally have higher quality factors</li>
+            <li><strong>Position:</strong> Higher positions (closer to the top) have better quality</li>
+            <li><strong>Page Context:</strong> Premium content categories receive higher quality factors</li>
+            <li><strong>ML-Powered:</strong> XGBoost model predicts quality factors based on historical performance</li>
+        </ul>
+        <p>Quality factors are applied as multipliers to the normalized bid value.</p>
+        
+        <h3 class="mt-4">Brand Strategies</h3>
+        <p>Brand strategies allow advertisers to customize their bidding behavior:</p>
+        <ul>
+            <li><strong>VPI Multiplier:</strong> Base multiplier applied to all bids</li>
+            <li><strong>Priority:</strong> Higher priority brands receive additional boost</li>
+            <li><strong>Custom Rules:</strong> JSON-based configuration for specialized bidding logic</li>
+        </ul>
+        
+        <hr class="my-5">
+        
+        <h2 class="mb-4">Error Handling</h2>
+        <p>The API uses standard HTTP status codes and provides detailed error messages:</p>
+        
+        <h4 class="mt-4">Example Error Response (400 Bad Request)</h4>
+        <pre><code>{
+  "detail": "Invalid bid type. Supported types are CPA, CPC, and CPM."
+}</code></pre>
+        
+        <h4 class="mt-4">Example Error Response (404 Not Found)</h4>
+        <pre><code>{
+  "detail": "No strategy found for brand ID 999."
+}</code></pre>
+        
+        <h4 class="mt-4">Example Error Response (500 Internal Server Error)</h4>
+        <pre><code>{
+  "detail": "Internal server error: Failed to connect to database."
+}</code></pre>
+        
+        <hr class="my-5">
+        
+        <footer class="text-center mt-5 mb-3">
+            <p>Multi-Model Ad Bidding Engine API &copy; 2025</p>
+        </footer>
+    </div>
+</body>
+</html>
