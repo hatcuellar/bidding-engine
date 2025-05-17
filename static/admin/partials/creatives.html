@@ -1,0 +1,233 @@
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Creative Assets Review</h5>
+                <div class="d-flex gap-2">
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-info" 
+                                hx-get="/api/creatives?status=pending"
+                                hx-target="#creatives-list"
+                                hx-indicator="#creative-spinner">
+                            Pending Review
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" 
+                                hx-get="/api/creatives?status=approved"
+                                hx-target="#creatives-list"
+                                hx-indicator="#creative-spinner">
+                            Approved
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" 
+                                hx-get="/api/creatives?status=rejected"
+                                hx-target="#creatives-list"
+                                hx-indicator="#creative-spinner">
+                            Rejected
+                        </button>
+                    </div>
+                    <div class="input-group input-group-sm" style="width: 250px;">
+                        <input type="text" class="form-control" placeholder="Search by brand ID"
+                               hx-get="/api/creatives"
+                               hx-trigger="keyup changed delay:500ms"
+                               hx-target="#creatives-list"
+                               hx-include="this"
+                               name="brand_id">
+                        <button class="btn btn-outline-secondary" type="button">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="creative-spinner" class="htmx-indicator text-center my-3">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="creatives-list" class="row g-4" 
+                     hx-get="/api/creatives?status=pending"
+                     hx-trigger="load">
+                    <!-- Creative cards will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Creative template for JS rendering -->
+<template id="creative-card-template">
+    <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+        <div class="card shadow-sm h-100 card-hover">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="text-truncate" style="max-width: 150px;" data-bs-toggle="tooltip" data-bs-placement="top" data-creative-id>
+                    Creative #ID
+                </span>
+                <span class="badge status-badge" data-status-badge>Pending</span>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3" style="height: 150px; overflow: hidden;">
+                    <img data-creative-img src="" class="img-fluid rounded" style="max-height: 150px;" alt="Creative Preview">
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <small class="text-muted">Brand ID:</small>
+                    <span data-brand-id>123</span>
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <small class="text-muted">Type:</small>
+                    <span data-creative-type>Image</span>
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <small class="text-muted">Dimensions:</small>
+                    <span data-dimensions>300 x 250</span>
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <small class="text-muted">Submitted:</small>
+                    <span data-submitted>2 days ago</span>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-info btn-sm" 
+                            data-review-button
+                            data-bs-toggle="modal" 
+                            data-bs-target="#creativeModal" 
+                            hx-get="/api/creatives/{id}/review" 
+                            hx-target="#creativeModalContent">
+                        Review Creative
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Creative Review Modal Content Template -->
+<template id="creative-review-template">
+    <div class="container-fluid p-0">
+        <div class="row">
+            <div class="col-12 col-md-8">
+                <div class="position-relative" style="height: 400px; background-color: #1a1a1a; display: flex; align-items: center; justify-content: center;">
+                    <img data-creative-img src="" class="img-fluid rounded" style="max-height: 100%; max-width: 100%;" alt="Creative Preview">
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="p-3">
+                    <h6>Creative Details</h6>
+                    <hr>
+                    <div class="mb-2 d-flex justify-content-between">
+                        <small class="text-muted">ID:</small>
+                        <span data-creative-id>123</span>
+                    </div>
+                    <div class="mb-2 d-flex justify-content-between">
+                        <small class="text-muted">Brand ID:</small>
+                        <span data-brand-id>123</span>
+                    </div>
+                    <div class="mb-2 d-flex justify-content-between">
+                        <small class="text-muted">Type:</small>
+                        <span data-creative-type>Image</span>
+                    </div>
+                    <div class="mb-2 d-flex justify-content-between">
+                        <small class="text-muted">Dimensions:</small>
+                        <span data-dimensions>300 x 250</span>
+                    </div>
+                    <div class="mb-2 d-flex justify-content-between">
+                        <small class="text-muted">Status:</small>
+                        <span data-status>Pending</span>
+                    </div>
+                    
+                    <h6 class="mt-4">Review Action</h6>
+                    <hr>
+                    
+                    <form hx-patch="/api/creatives/{id}" hx-swap="none">
+                        <div class="mb-3">
+                            <label class="form-label">Decision</label>
+                            <div class="d-flex gap-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="status" id="statusApproved" value="approved" checked>
+                                    <label class="form-check-label" for="statusApproved">
+                                        Approve
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="status" id="statusRejected" value="rejected">
+                                    <label class="form-check-label" for="statusRejected">
+                                        Reject
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="rejectReasonContainer" style="display: none;">
+                            <label for="rejectReason" class="form-label">Rejection Reason</label>
+                            <select class="form-select" id="rejectReason" name="reject_reason">
+                                <option value="">Select a reason...</option>
+                                <option value="offensive_content">Contains offensive content</option>
+                                <option value="low_quality">Insufficient image quality</option>
+                                <option value="wrong_dimensions">Incorrect dimensions</option>
+                                <option value="misleading">Contains misleading information</option>
+                                <option value="trademarked">Uses unauthorized trademarked material</option>
+                                <option value="other">Other (specify in notes)</option>
+                            </select>
+                            <div class="form-text text-muted">Please select a reason for rejection</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="reviewNotes" class="form-label">Notes (optional)</label>
+                            <textarea class="form-control" id="reviewNotes" rows="3" name="notes" placeholder="Add any notes about this creative..."></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary" 
+                                    hx-indicator="#submitSpinner">
+                                <span id="submitSpinner" class="spinner-border spinner-border-sm htmx-indicator me-1" role="status"></span>
+                                Submit Review
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+    // Toggle rejection reason field based on status selection
+    document.addEventListener('DOMContentLoaded', function() {
+        const reviewForm = document.querySelector('#creativeModalContent form');
+        if (reviewForm) {
+            // Set up event listeners for the radio buttons
+            const statusRadios = reviewForm.querySelectorAll('input[name="status"]');
+            const rejectReasonContainer = document.getElementById('rejectReasonContainer');
+            
+            statusRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'rejected') {
+                        rejectReasonContainer.style.display = 'block';
+                    } else {
+                        rejectReasonContainer.style.display = 'none';
+                    }
+                });
+            });
+        }
+    });
+    
+    // Handle successful review submission
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.pathInfo.requestPath.includes('/api/creatives/') && 
+            event.detail.xhr.status === 200) {
+            
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('creativeModal'));
+            if (modal) modal.hide();
+            
+            // Refresh the creatives list
+            const currentActiveButton = document.querySelector('#creatives-list button.active');
+            const status = currentActiveButton ? currentActiveButton.getAttribute('data-status') : 'pending';
+            
+            htmx.trigger('#creatives-list', 'refresh', { status: status });
+            
+            // Show success toast
+            const toast = new bootstrap.Toast(document.getElementById('successToast'));
+            toast.show();
+        }
+    });
+</script>
