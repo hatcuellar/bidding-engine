@@ -4,11 +4,13 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "aiomysql>=0.2.0",
     "alembic>=1.13.1",
     "email-validator>=2.2.0",
     "fastapi>=0.115.12",
     "gunicorn>=23.0.0",
     "hypothesis>=6.131.18",
+    "mysql-connector-python>=9.3.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.33.1",
     "opentelemetry-instrumentation-fastapi>=0.54b1",
     "opentelemetry-sdk>=1.33.1",

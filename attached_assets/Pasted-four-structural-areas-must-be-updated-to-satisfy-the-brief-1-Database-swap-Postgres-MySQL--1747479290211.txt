@@ -1,0 +1,93 @@
+four structural areas must be updated to satisfy the brief.
+1 · Database swap ➜ Postgres → MySQL
+
+    Replace asyncpg / psycopg engine with aiomysql (async) or mysql-connector-python (sync).
+
+    Edit database.py
+
+        SQLALCHEMY_DATABASE_URL = "mysql+aiomysql://user:pass@host/db"
+
+        Configure pool_recycle, charset="utf8mb4" for MySQL 8.0.
+
+    Run alembic revision --autogenerate against MySQL to create dialect-correct DDL.
+
+    Update CI workflow to spin up a MySQL service instead of Postgres.
+
+2 · Past-performance–driven predictive layer
+
+    Data features
+
+        Aggregate ROAS = revenue ÷ cost per (brand_id, partner_id, slot_id, device_type, day).
+
+        Additional covariates: day-of-week, hour-bucket, creative_type, placement_score.
+
+    Model choice
+
+        Start with LightGBM / XGBoost regression predicting expected_revenue_per_impression.
+
+        Target = (revenue / impressions); weight each sample by impressions to avoid tiny outliers.
+
+    Integration
+
+        Move model code to utils/roas_predictor.py.
+
+        In bidding_engine.py compute
+
+        vpi_pred = model.predict(features)
+        final_score = vpi_pred * brand_strategy_multiplier
+
+    Retraining workflow
+
+        Nightly Workflow: query yesterday’s performance, append to feature store, retrain, dump roas_model.json to Redis + Git.
+
+3 · API surface for the Partnerize platform
+Endpoint	Method	Purpose
+/api/score	POST	Already exists – supply bids, returns ranked bids & predicted ROAS.
+/api/roas	GET	Returns predicted ROAS for a brand-partner-slot tuple (for reporting).
+/api/performance	POST	Ingest actual click / conversion events to update the feature store.
+
+    Secure with JWT (iss=partnerize, scopes: brand, partner, admin).
+
+    Document with OpenAPI → /docs auto-generated.
+
+4 · Maximising ROAS across the entire brand portfolio
+
+    Portfolio constraint
+
+        Maintain an in-memory budget ledger keyed by brand_id; deduct predicted cost when a bid wins.
+
+        If portfolio-level ROAS for a brand drops below threshold, throttle its bids.
+
+    Bid-ranking tweak
+
+        Score = predicted_revenue - λ * predicted_cost where λ adjusts to keep ROAS ≥ target.
+
+        λ can be learned nightly using Lagrange multipliers (simple gradient update).
+
+    Real-time ROAS monitor
+
+        Prometheus gauge brand_roas_current{brand_id} updated every 1 min from Redis counters.
+
+        Alert if gauge < target for 5 consecutive minutes.
+
+🛠️ Immediate next steps (ordered)
+
+    Branch → feature/mysql-migration
+
+    Swap SQLAlchemy URL & install aiomysql; run Alembic autogen for MySQL.
+
+    Refactor database.py, update CI MySQL service.
+
+    Build feature store view for ROAS aggregates; write ETL script.
+
+    Implement roas_predictor.py with baseline LightGBM; store model JSON.
+
+    Integrate predictor into bidding_engine.py; unit-test new final_score.
+
+    Add nightly Workflow for retraining + λ tuning.
+
+    Extend API (/roas, /performance); secure with JWT.
+
+    Update Prometheus metrics & alerts for brand-level ROAS.
+
+    Update README, .env.example, swagger comments; hand API spec to integration team.
