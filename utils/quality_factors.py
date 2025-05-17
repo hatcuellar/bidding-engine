@@ -12,13 +12,14 @@ import json
 
 logger = logging.getLogger(__name__)
 
-async def apply_quality_factors(normalized_value: float, ad_slot: Dict[str, Any]) -> float:
+async def apply_quality_factors(normalized_value: float, ad_slot: Dict[str, Any], brand_id: int = None) -> float:
     """
     Apply quality factors to adjust the normalized bid value.
     
     Args:
         normalized_value: The normalized bid value per impression
         ad_slot: Dictionary containing ad slot information
+        brand_id: Brand identifier (for XGBoost prediction)
         
     Returns:
         Adjusted bid value after applying quality factors
@@ -30,22 +31,34 @@ async def apply_quality_factors(normalized_value: float, ad_slot: Dict[str, Any]
     position = ad_slot.get("position", 0)
     page_info = ad_slot.get("page", {})
     
-    # Base quality factor starts at 1.0 (no adjustment)
-    quality_factor = 1.0
-    
-    # Adjust based on ad size/dimensions
-    size_factor = get_size_quality_factor(width, height)
-    quality_factor *= size_factor
-    
-    # Adjust based on position (higher positions generally have better quality)
-    if position > 0:
-        position_factor = get_position_quality_factor(position)
-        quality_factor *= position_factor
-    
-    # Adjust based on page quality (if available)
-    if page_info:
-        page_factor = get_page_quality_factor(page_info)
-        quality_factor *= page_factor
+    # Use XGBoost prediction if brand_id is provided and XGBoost is available
+    try:
+        if brand_id is not None:
+            from utils.xgboost_quality import predict_quality_factor
+            quality_factor = await predict_quality_factor(ad_slot, brand_id)
+            logger.info(f"Using XGBoost quality prediction: {quality_factor:.4f}")
+        else:
+            # Fallback to rule-based approach if XGBoost is not available
+            raise ImportError("No brand_id provided, using rule-based approach")
+    except (ImportError, ModuleNotFoundError):
+        # Base quality factor starts at 1.0 (no adjustment)
+        quality_factor = 1.0
+        
+        # Adjust based on ad size/dimensions
+        size_factor = get_size_quality_factor(width, height)
+        quality_factor *= size_factor
+        
+        # Adjust based on position (higher positions generally have better quality)
+        if position > 0:
+            position_factor = get_position_quality_factor(position)
+            quality_factor *= position_factor
+        
+        # Adjust based on page quality (if available)
+        if page_info:
+            page_factor = get_page_quality_factor(page_info)
+            quality_factor *= page_factor
+        
+        logger.info(f"Using rule-based quality factors: {quality_factor:.4f}")
     
     # Apply the quality factor to the normalized value
     adjusted_value = normalized_value * quality_factor

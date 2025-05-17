@@ -1,11 +1,13 @@
 import logging
 import json
+import time
 from typing import Dict, Any, Optional, List, Tuple
 
 from utils.normalize import normalize_bid_to_impression_value
 from utils.beta_posterior import get_smoothed_rates
 from utils.quality_factors import apply_quality_factors
 from utils.redis_cache import get_cached_feature, set_cached_feature
+from utils.benchmarking import timed_execution, performance_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ class BiddingEngine:
         Returns:
             Dict with processed bid information
         """
+        start_time = time.time()
+        
         brand_id = int(bid_request.get("brand_id", 0))
         bid_amount = float(bid_request.get("bid_amount", 0))
         bid_type = bid_request.get("bid_type", "CPM")
@@ -45,22 +49,51 @@ class BiddingEngine:
 
         # Apply brand strategy if available
         if strategy:
+            strategy_start = time.time()
             bid_amount = self.apply_brand_strategy(bid_amount, strategy)
+            strategy_time = (time.time() - strategy_start) * 1000
+            await performance_tracker.record_timing(
+                'strategy_application', 
+                strategy_time,
+                {'brand_id': brand_id, 'strategy_type': strategy.get('type', 'default')}
+            )
         
         # Get historical performance metrics (with beta smoothing)
         slot_id = int(ad_slot.get("id", 0))
-        ctr, cvr = await self.get_historical_performance(brand_id, slot_id)
+        perf_result, perf_time = await timed_execution(
+            'historical_performance',
+            self.get_historical_performance,
+            brand_id, slot_id,
+            metadata={'brand_id': brand_id, 'slot_id': slot_id}
+        )
+        ctr, cvr = perf_result
         
         # Normalize bid to impression value (CPM equivalent)
+        norm_start = time.time()
         normalized_value = normalize_bid_to_impression_value(
             bid_amount=bid_amount,
             bid_type=bid_type,
             ctr=ctr,
             cvr=cvr
         )
+        norm_time = (time.time() - norm_start) * 1000
+        await performance_tracker.record_timing(
+            'bid_normalization', 
+            norm_time,
+            {'bid_type': bid_type, 'brand_id': brand_id}
+        )
         
-        # Apply quality factors
-        final_bid_value = await apply_quality_factors(normalized_value, ad_slot)
+        # Apply quality factors with XGBoost (pass brand_id for ML-based predictions)
+        quality_result, quality_time = await timed_execution(
+            'quality_factors',
+            apply_quality_factors,
+            normalized_value, ad_slot, brand_id=brand_id,
+            metadata={'brand_id': brand_id, 'slot_id': slot_id}
+        )
+        final_bid_value = quality_result
+        
+        # Calculate total processing time
+        total_time = (time.time() - start_time) * 1000
         
         # Construct response
         response = {
@@ -71,8 +104,17 @@ class BiddingEngine:
             "ctr": ctr,
             "cvr": cvr,
             "brand_id": brand_id,
-            "ad_slot_id": ad_slot.get("id")
+            "ad_slot_id": ad_slot.get("id"),
+            "quality_factor": final_bid_value / normalized_value if normalized_value > 0 else 1.0,
+            "process_time_ms": round(total_time, 2)
         }
+        
+        # Record total processing time
+        await performance_tracker.record_timing(
+            'total_bid_processing', 
+            total_time,
+            {'brand_id': brand_id, 'bid_type': bid_type, 'slot_id': slot_id}
+        )
         
         logger.debug(f"Bid response: {response}")
         return response

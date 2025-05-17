@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from database import engine, Base
-from routes import bid, health
+from routes import bid, health, metrics
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
