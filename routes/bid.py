@@ -3,8 +3,6 @@ from sqlalchemy.orm import Session
 import time
 import json
 import logging
-from opentelemetry import trace
-from opentelemetry.trace import get_tracer
 
 from database import get_db
 from bidding_engine import bidding_engine
@@ -13,7 +11,6 @@ from schemas import BidRequest, BidResponse, BidHistoryResponse, BrandStrategyRe
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-tracer = get_tracer(__name__)
 
 @router.post("/calculate", response_model=BidResponse, status_code=status.HTTP_200_OK)
 async def calculate_bid(
@@ -32,7 +29,8 @@ async def calculate_bid(
     """
     start_time = time.time()
     
-    with tracer.start_as_current_span("calculate_bid"):
+    # Simple timing instead of OpenTelemetry tracing
+    logger.info(f"Starting bid calculation for brand_id: {bid_request.brand_id}")
         try:
             # Convert Pydantic model to dict for bidding engine
             bid_request_dict = bid_request.dict()
@@ -113,7 +111,7 @@ async def get_bid_history(
     Query parameters:
     - limit: Number of records to return (default 10)
     """
-    with tracer.start_as_current_span("get_bid_history"):
+    logger.info(f"Retrieving bid history for brand_id: {brand_id}")
         try:
             history = db.query(models.BidHistory).filter(
                 models.BidHistory.brand_id == brand_id
